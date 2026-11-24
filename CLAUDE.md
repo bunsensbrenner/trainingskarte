@@ -6,7 +6,8 @@ Web-App, die man in Safari über »Zum Home-Bildschirm« installiert. Läuft off
 
 ## Aktueller Stand (24.11.2026)
 - Fassung 1.0, auf dem Mac in iPhone-Größe geprüft (Browser auf Chrome-Basis). Auf einem echten iPhone noch nicht getestet.
-- Noch nicht im Internet. Geplant: GitHub Pages. Auf diesem Mac ist GitHub nicht eingerichtet.
+- Online: https://bunsensbrenner.github.io/trainingskarte/ (GitHub Pages, Zweig main, öffentliches Projekt bunsensbrenner/trainingskarte).
+- Veröffentlichen: VERSION in `sw.js` erhöhen, committen, `git push`. Das Programm gh liegt in `.werkzeug/` (nicht in Git).
 
 ## Dateien
 - `index.html` Grundgerüst · `stil.css` Aussehen · `uebungen.js` Übungen, Figuren, Startpläne · `app.js` Funktionen
