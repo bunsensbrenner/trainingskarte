@@ -1,6 +1,6 @@
 // Offline-Teil: speichert die App-Dateien auf dem Handy.
 // Bei jeder neuen Fassung die Nummer erhöhen, sonst bekommen Handys die Änderung nicht.
-const VERSION = "trainingskarte-1";
+const VERSION = "trainingskarte-2";
 const FILES = ["./", "index.html", "stil.css", "uebungen.js", "app.js", "manifest.webmanifest",
   "icons/icon-180.png", "icons/icon-192.png", "icons/icon-512.png"];
 
