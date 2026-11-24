@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- Die App darf nur eigene Dateien laden: es gehen keine Daten ins Internet. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; connect-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex">
+<title>Trainingskarte</title>
+<meta name="description" content="Trainingspläne erstellen, Einheiten eintragen, Fortschritt sehen.">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Training">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="format-detection" content="telephone=no">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f0f10" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="stil.css">
+</head>
+<body>
+<main class="wrap">
+  <div id="install" class="msg" hidden><b>So wird es eine App</b><br>In Safari auf „Teilen“ <span aria-hidden="true">(Quadrat mit Pfeil)</span> tippen, dann „Zum Home-Bildschirm“. Danach die App über das neue Symbol öffnen und erst dort deine Daten laden: Safari und die App speichern getrennt.<div class="row2"><button class="link" id="instx">Ausblenden</button></div></div>
+  <div id="update" class="msg" hidden>Eine neue Version ist da. <button class="link" id="updgo">Jetzt laden</button></div>
+  <div id="store" class="msg" role="alert" hidden></div>
+  <section id="v-train">
+    <div class="head"><h1>Training</h1><span class="hbtn"><button class="who" id="who" aria-label="Profil wechseln"></button><button class="icon" id="setbtn" aria-label="Einstellungen und Sicherung"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.2"/><circle cx="9" cy="17" r="2.2"/></svg></button></span></div>
+    <div class="sub" id="date"></div>
+    <div id="remind" class="msg" hidden></div>
+    <div class="seg" role="group" aria-label="Modus" id="seg"></div>
+    <div class="plans" id="plans"></div>
+    <div class="editbar"><span class="sub" id="planinfo"></span><button class="link" id="edit">Plan bearbeiten</button></div>
+    <div class="list" id="list"></div>
+    <div class="finish" id="finish"></div>
+  </section>
+  <section id="v-lib" hidden>
+    <h1>Übungen</h1>
+    <div class="sub">Tippe auf eine Übung für Anleitung und Fortschritt.</div>
+    <div class="chips" id="libf" role="group" aria-label="Ausstattung"></div>
+    <button class="cta sec" id="custnew" style="margin-top:10px">+ Eigene Übung</button>
+    <div id="lib"></div>
+  </section>
+  <section id="v-run" hidden>
+    <h1>Laufen</h1>
+    <div id="runs"></div>
+  </section>
+  <section id="v-log" hidden>
+    <h1>Verlauf</h1>
+    <div id="week"></div>
+    <div id="cal"></div>
+    <h2 class="sech">Beschwerden</h2>
+    <div class="sub" id="painhead"></div>
+    <div class="bars" id="bars"></div>
+    <div class="sub">Letzte Einheiten, links ältere. Höhe = Beschwerden von 0 bis 10.</div>
+    <div id="advice"></div>
+    <h2 class="sech">Fortschritt</h2>
+    <div id="progs"></div>
+    <h2 class="sech">Einheiten</h2>
+    <div id="logs"></div>
+    <p class="note">Die Pläne sind Vorschläge, kein ärztlicher Rat. Bei stechendem Schmerz die Übung abbrechen. Bei Skoliose oder nach Verletzungen den Plan mit Physiotherapie oder Arzt abstimmen.</p>
+  </section>
+</main>
+<div class="sheet" id="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="sh-title"></div>
+<div class="toast" id="toast" hidden role="status"></div>
+<div class="timer" id="timer" hidden role="timer"><button class="adj" id="tminus" aria-label="15 Sekunden kürzer">−15</button><span id="tt"></span><button class="adj" id="tplus" aria-label="15 Sekunden länger">+15</button><button id="tskip">Weiter</button></div>
+<nav class="tabs" aria-label="Bereiche">
+  <button data-v="train" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h2M19 12h2M6 8v8M18 8v8M9 6v12M15 6v12M9 12h6"/></svg>Training</button>
+  <button data-v="lib"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/></svg>Übungen</button>
+  <button data-v="run"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="15" cy="4.5" r="1.8"/><path d="M6 10l4-2.5 4 2-2.5 5 3.5 2.5V21M11.5 14.5L9 18H4.5M14 9.5l2 2.5h3"/></svg>Laufen</button>
+  <button data-v="log"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 20V11M12 20V5M19 20v-6"/></svg>Verlauf</button>
+</nav>
+<script src="uebungen.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
