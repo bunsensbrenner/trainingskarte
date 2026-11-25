@@ -27,6 +27,11 @@ Web-App, die man in Safari über »Zum Home-Bildschirm« installiert. Läuft off
 - Schrift: Systemschrift statt Manrope, damit nichts nachgeladen wird.
 - Git-Autor ist hier neutral gesetzt, damit keine E-Mail öffentlich wird.
 
+## Läufe aus Dateien (seit 1.1)
+- Import von GPX, TCX, FIT, ZIP (Garmin »Original exportieren«) und der Garmin-Aktivitätenliste (CSV). Kein GPS in der App (Wunsch: Datei-Import statt Live-Tracking, weil der Bildschirm sonst an bleiben müsste).
+- Gespeichert werden nur Datum, km, Zeit, Kilometerzeiten, Ø Puls, keine Wegpunkte.
+- `testdaten/` enthält künstliche Testdateien (Berlin, keine echten Läufe). Mit echten Garmin-Dateien noch nicht geprüft; die CSV-Spaltennamen von Garmin sind geraten und werden nach Namen gesucht.
+
 ## Bekannte Grenzen
 - Bei gesperrtem Handy klingelt der Timer nicht zuverlässig.
 - Im Lautlos-Modus piept es nur mit der Einstellung »Auch im Lautlos-Modus« (kann Musik anhalten).

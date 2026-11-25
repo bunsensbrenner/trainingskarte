@@ -163,6 +163,7 @@ function renderSheet(){
   if(sheetMode==="run")return renderRunSheet();
   if(sheetMode==="prog")return renderProg();
   if(sheetMode==="plates")return renderPlates();
+  if(sheetMode==="rimp")return renderRimp();
   if(picker)return renderPicker(false);
   const p=plan(),r=rowAt(p,open),e=EX[r.id],s=sets(p,open),last=lastFor(e.id),tr=topReps(r.reps);
   const hit=last&&tr&&last.length>=r.sets&&last.every(x=>+x.r>=tr);
@@ -573,7 +574,12 @@ function barChart(v,o){const W=340,H=112,b=20,t=18,mx=Math.max(o.max||0,...v.map
   return `<svg class="bch" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(o.label)}: ${v.map(x=>x.d+" "+(x.v==null?"ohne Angabe":dec(x.v))).join(", ")}"><line class="cg" x1="0" x2="${W}" y1="${H-b}" y2="${H-b}"/>${v.map((x,i)=>{const bw=Math.min(24,w-6),h=x.v==null?0:Math.max(2,x.v/mx*(H-b-t)),cx=i*w+w/2;return `${x.v==null?`<text class="ct" x="${cx}" y="${H-b-5}" text-anchor="middle">–</text>`:`<path class="${o.cls}" d="M${cx-bw/2},${H-b}v${-Math.max(0,h-4)}q0,-4 4,-4h${bw-8}q4,0 4,4v${Math.max(0,h-4)}z"/>${showAll||i===top||i===lastI?`<text class="ct v" x="${cx}" y="${(H-b-Math.max(4,h)-5).toFixed(1)}" text-anchor="middle">${dec(x.v)}</text>`:""}`}${o.days&&(showAll||i%2===lastI%2)?`<text class="ct" x="${cx}" y="${H-5}" text-anchor="middle">${x.d}</text>`:""}`}).join("")}</svg>`}
 function renderRuns(){const p=prof(),R0=myRuns(),lbl=p?p.pain:"";
   const m=monday(Date.now()),pm=addDays(m,-7),km=w=>Math.round(R0.filter(r=>inWeek(r.ts,w)).reduce((a,r)=>a+(r.km||0),0)*10)/10,a=km(m),b=km(pm);
-  let h=`<button class="cta" id="runnew">+ Lauf eintragen</button>`;
+  let h=`<div class="btns"><button class="cta" id="runnew">+ Lauf eintragen</button><label class="cta sec filebtn">Aus Datei laden (Garmin, GPX …)<input type="file" id="runfile" multiple></label></div>
+   <details class="help"><summary>So bekommst du die Datei</summary>
+   <p><b>Garmin-Uhr:</b> In Safari connect.garmin.com öffnen und anmelden. Aktivität öffnen, oben auf das Zahnrad tippen, dann „Original exportieren“ oder „In GPX exportieren“. Die Datei landet in der Dateien-App unter „Downloads“. Hier auf „Aus Datei laden“ tippen und sie auswählen. Kommt eine leere Datei heraus, den Export nochmal versuchen.</p>
+   <p><b>Viele alte Läufe auf einmal:</b> Auf connect.garmin.com unter „Aktivitäten“ nach unten scrollen, bis alle geladen sind, dann „CSV exportieren“. Darin stehen nur Datum, Strecke, Zeit und Puls.</p>
+   <p><b>Nur mit dem iPhone:</b> Den Lauf mit einer Lauf-App aufzeichnen, die bei gesperrtem Bildschirm weiterläuft und eine GPX-Datei speichern oder teilen kann. Die Datei in „Dateien“ sichern und hier laden.</p>
+   <p>Die App merkt sich nur Datum, Strecke, Zeit, Kilometerzeiten und Puls, nicht deine Strecke auf der Karte. Läufe, die schon eingetragen sind, erkennt sie und lässt sie weg.</p></details>`;
   if(R0.length){
     h+=`<div class="target" style="margin-top:20px"><div><b>${dec(a)} km</b><span>diese Woche</span></div><div><b>${dec(b)} km</b><span>letzte Woche</span></div></div>`;
     if(b>0&&a>b*1.3)h+=`<div class="msg">Diese Woche schon ${Math.round((a/b-1)*100)} % mehr Kilometer als letzte Woche.</div>`;
@@ -596,8 +602,122 @@ function renderRunSheet(){const r=erun;
   <label class="lbl">Dauer (Minuten, z. B. 32 oder 32:30)<input id="rdur" placeholder="32:30" value="${r.sec?(r.sec>=3600?Math.floor(r.sec/3600)+":"+mmss(r.sec%3600).padStart(5,"0"):mmss(r.sec)):""}"></label>
   <h3 style="margin-top:20px">Beschwerden ${esc(r.painLabel||"")} beim oder nach dem Lauf</h3><div class="sub">0 = keine, 10 = sehr stark</div>${painRow(r.pain,"data-rp")}
   <textarea id="rnote" rows="2" placeholder="Notiz (optional)">${esc(r.note)}</textarea>
+  ${r.hr||r.src?`<div class="sub" style="margin-top:8px">${[r.hr?"Ø Puls "+r.hr:"",r.src?"aus Datei ("+esc(r.src)+")":""].filter(Boolean).join(" · ")}</div>`:""}${splitsHTML(r)}
   <button class="cta" id="rsave">Speichern</button><div class="sub" id="rmsg" style="margin-top:8px"></div>
   ${r.id?`<div class="row2"><button class="link danger" id="rdel">${erunDel?"Wirklich löschen? Nochmal tippen":"Lauf löschen"}</button></div>`:""}</div>`}
+
+/* ---------- Läufe aus Dateien (Garmin, Lauf-Apps) ---------- */
+/* Gelesen werden GPX, TCX, FIT, ZIP mit FIT darin und die Aktivitäten-Liste (CSV) von Garmin Connect.
+   Gespeichert werden nur Datum, Strecke, Zeit, Kilometerzeiten und Puls, keine Wegpunkte. */
+let rimp=null;
+const RUNWORDS=/run|lauf|jog|trail|treadmill/i;
+const SPORTDE={running:"Laufen",cycling:"Radfahren",biking:"Radfahren",walking:"Gehen",hiking:"Wandern",swimming:"Schwimmen",other:"Sonstiges"};
+const sportDe=s=>s?SPORTDE[String(s).toLowerCase()]||String(s).slice(0,30):"";
+function hav(a,b){const R=6371008.8,r=Math.PI/180,dl=(b.lat-a.lat)*r,dn=(b.lon-a.lon)*r,x=Math.sin(dl/2)**2+Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin(dn/2)**2;return 2*R*Math.asin(Math.min(1,Math.sqrt(x)))}
+/* Strecke und Bewegungszeit aus Messpunkten. p: {t (ms), lat, lon, d (Meter ab Start, falls die Uhr es liefert), hr, seg (neuer Abschnitt)} */
+function track(P){
+  P=P.filter(p=>isFinite(p.t)&&(isFinite(p.d)||(isFinite(p.lat)&&isFinite(p.lon)&&Math.abs(p.lat)<=90&&Math.abs(p.lon)<=180&&!(p.lat===0&&p.lon===0)))).sort((a,b)=>a.t-b.t);
+  if(P.length<2)return null;const dev=P.filter(p=>isFinite(p.d)).length>P.length*.8;if(dev)P=P.filter(p=>isFinite(p.d));
+  /* GPS-Sprünge: Punkte, die schneller als 12 m/s vom letzten guten Punkt entfernt sind, fallen weg */
+  if(!dev){const k=[P[0]];for(const p of P.slice(1)){const q=k[k.length-1],dt=(p.t-q.t)/1000;if(p.seg||dt<=0||hav(q,p)/dt<=12||k.length===1&&dt>60)k.push(p)}P=k}
+  let dist=0,mov=0,anc=P[0],prev=P[0];const cum=[{d:0,m:0}],hrs=[];if(isFinite(P[0].hr))hrs.push(P[0].hr);
+  for(const p of P.slice(1)){const dt=(p.t-prev.t)/1000;if(dt<=0)continue;let dd=0;
+    if(p.seg){anc=p;prev=p;cum.push({d:dist,m:mov});continue}
+    if(dev)dd=Math.max(0,p.d-prev.d);else{const s=hav(anc,p);if(s>=4){dd=s;anc=p}}
+    if(!(dt>30&&dd/dt<.5))mov+=dt;dist+=dd;cum.push({d:dist,m:mov});prev=p;if(isFinite(p.hr)&&p.hr>30&&p.hr<250)hrs.push(p.hr)}
+  const splits=[];let k=1,last=0;for(let i=1;i<cum.length&&k<=300;i++)while(cum[i].d>=k*1000-5&&k<=300){const a=cum[i-1],b=cum[i],f=b.d>a.d?Math.min(1,(k*1000-a.d)/(b.d-a.d)):1,m=a.m+f*(b.m-a.m);splits.push(Math.round(m-last));last=m;k++}
+  return {ts:P[0].t,dist,sec:Math.round(mov),splits,hr:hrs.length?Math.round(hrs.reduce((a,b)=>a+b,0)/hrs.length):null}}
+const mkRun=(o,src)=>({ts:o.ts,km:Math.round(o.dist/10)/100,sec:Math.round(o.sec||0),splits:o.splits||[],hr:o.hr||null,sport:o.sport||"",src});
+const tag=(el,n)=>el.getElementsByTagNameNS("*",n);
+const first=(el,n)=>{const x=tag(el,n)[0];return x?x.textContent.trim():""};
+function parseGPX(doc){const out=[];
+  for(const trk of tag(doc,"trk")){const P=[];let i=0;for(const seg of tag(trk,"trkseg")){let s=true;for(const pt of tag(seg,"trkpt")){const h=first(pt,"hr");P.push({lat:+pt.getAttribute("lat"),lon:+pt.getAttribute("lon"),t:Date.parse(first(pt,"time")),hr:h?+h:NaN,seg:s&&i>0});s=false}i++}
+    const r=track(P);if(r)out.push(mkRun(Object.assign(r,{sport:first(trk,"type")}),"GPX"))}
+  if(!out.length&&tag(doc,"trkpt").length)throw new Error("Die GPX-Datei enthält keine Zeiten. Ohne Zeiten lässt sich kein Lauf berechnen.");return out}
+function parseTCX(doc){const out=[];
+  for(const act of tag(doc,"Activity")){const laps=[...tag(act,"Lap")],P=[];let i=0;
+    for(const tr of tag(act,"Track")){let s=true;for(const tp of tag(tr,"Trackpoint")){const d=first(tp,"DistanceMeters"),pos=tag(tp,"Position")[0],hr=tag(tp,"HeartRateBpm")[0];
+      P.push({t:Date.parse(first(tp,"Time")),d:d===""?NaN:+d,lat:pos?+first(pos,"LatitudeDegrees"):NaN,lon:pos?+first(pos,"LongitudeDegrees"):NaN,hr:hr?+first(hr,"Value"):NaN,seg:s&&i>0});s=false}i++}
+    const r=track(P)||{splits:[],hr:null};
+    const lt=laps.reduce((a,l)=>a+(+first(l,"TotalTimeSeconds")||0),0),ld=laps.reduce((a,l)=>a+(+[...l.children].find(c=>c.localName==="DistanceMeters")?.textContent||0),0);
+    const ts=Date.parse(laps[0]?laps[0].getAttribute("StartTime"):"")||r.ts||Date.parse(first(act,"Id"));if(!isFinite(ts))continue;
+    out.push(mkRun({ts,dist:ld>0?ld:r.dist||0,sec:lt>0?lt:r.sec,splits:r.splits,hr:r.hr,sport:act.getAttribute("Sport")},"TCX"))}
+  return out}
+/* FIT ist Garmins eigenes Format: Datensätze mit vorher festgelegtem Aufbau */
+function parseFIT(buf){const v=new DataView(buf),n=buf.byteLength,u8=new Uint8Array(buf);
+  if(n<14||String.fromCharCode(u8[8],u8[9],u8[10],u8[11])!==".FIT")throw new Error("Keine FIT-Datei.");
+  const hs=u8[0],end=Math.min(n,hs+v.getUint32(4,true)),defs={},ses=[],rec=[],EPO=631065600;let p=hs,lastTs=0;
+  const INV={1:0x7F,2:0xFF,3:0x7FFF,4:0xFFFF,5:0x7FFFFFFF,6:0xFFFFFFFF,0:0xFF,10:0,11:0,12:0};
+  const rd=(b,s,o,le)=>{switch(b){case 0:case 2:case 10:case 13:return s===1?u8[o]:null;case 1:return s===1?v.getInt8(o):null;case 3:return s===2?v.getInt16(o,le):null;case 4:case 11:return s===2?v.getUint16(o,le):null;
+    case 5:return s===4?v.getInt32(o,le):null;case 6:case 12:return s===4?v.getUint32(o,le):null;case 8:return s===4?v.getFloat32(o,le):null;default:return null}};
+  while(p<end){const h=u8[p++];let lt,ct=null;
+    if(h&0x80){lt=(h>>5)&3;const off=h&31;ct=(lastTs&~31)+off;if(off<(lastTs&31))ct+=32;lastTs=ct}
+    else if(h&0x40){lt=h&15;const dev=h&0x20,le=u8[p+1]===0,gm=le?v.getUint16(p+2,true):v.getUint16(p+2,false),nf=u8[p+4];p+=5;const f=[];
+      for(let i=0;i<nf;i++){f.push({num:u8[p],size:u8[p+1],base:u8[p+2]&0x1F});p+=3}let dz=0;if(dev){const nd=u8[p++];for(let i=0;i<nd;i++){dz+=u8[p+1];p+=3}}
+      defs[lt]={gm,le,f,dz};continue}
+    else lt=h&15;
+    const d=defs[lt];if(!d)throw new Error("Die FIT-Datei ist beschädigt.");const m={};
+    for(const f of d.f){const x=rd(f.base,f.size,p,d.le);if(x!==null&&x!==INV[f.base])m[f.num]=x;p+=f.size}p+=d.dz;
+    if(m[253]!=null&&ct===null)lastTs=m[253];const ts=m[253]??ct;
+    if(d.gm===18)ses.push({start:m[2],sport:m[5],timer:m[8],elapsed:m[7],dist:m[9],hr:m[16],ts});
+    else if(d.gm===20&&ts!=null)rec.push({t:(ts+EPO)*1000,d:m[5]!=null?m[5]/100:NaN,lat:m[0]!=null?m[0]*180/2**31:NaN,lon:m[1]!=null?m[1]*180/2**31:NaN,hr:m[3]??NaN})}
+  const SP={1:"running",2:"cycling",5:"swimming",11:"walking",17:"hiking"};
+  const r=track(rec)||{splits:[],hr:null,dist:0,sec:0};
+  if(!ses.length){if(!r.ts)throw new Error("In der FIT-Datei ist keine Aktivität.");return [mkRun(r,"FIT")]}
+  return ses.map(s=>mkRun({ts:s.start!=null?(s.start+EPO)*1000:r.ts,dist:s.dist!=null?s.dist/100:r.dist,sec:s.timer!=null?s.timer/1000:s.elapsed!=null?s.elapsed/1000:r.sec,
+    splits:ses.length===1?r.splits:[],hr:s.hr??r.hr,sport:SP[s.sport]||(s.sport!=null?"other":"")},"FIT"))}
+async function unzip(buf){const v=new DataView(buf),u8=new Uint8Array(buf),out=[];let e=-1;
+  for(let i=buf.byteLength-22;i>=Math.max(0,buf.byteLength-65600);i--)if(v.getUint32(i,true)===0x06054b50){e=i;break}
+  if(e<0)throw new Error("Die ZIP-Datei ist beschädigt.");let p=v.getUint32(e+16,true);const cnt=v.getUint16(e+10,true);
+  for(let k=0;k<cnt&&k<50;k++){if(v.getUint32(p,true)!==0x02014b50)break;const meth=v.getUint16(p+10,true),cs=v.getUint32(p+20,true),nl=v.getUint16(p+28,true),xl=v.getUint16(p+30,true),cl=v.getUint16(p+32,true),lo=v.getUint32(p+42,true);
+    const name=new TextDecoder().decode(u8.subarray(p+46,p+46+nl));p+=46+nl+xl+cl;if(!/\.(fit|gpx|tcx)$/i.test(name))continue;
+    const st=lo+30+v.getUint16(lo+26,true)+v.getUint16(lo+28,true),raw=u8.slice(st,st+cs);let data;
+    if(meth===0)data=raw.buffer;else if(meth===8){if(!window.DecompressionStream)throw new Error("Dieses Gerät kann ZIP nicht entpacken. Bitte die Datei vorher entpacken.");data=await new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).arrayBuffer()}else continue;
+    out.push({name:name.split("/").pop(),buf:data})}
+  if(!out.length)throw new Error("In der ZIP-Datei ist keine Lauf-Datei (FIT, GPX oder TCX).");return out}
+/* CSV: Garmin ändert die Spalten immer wieder, daher nach Spaltennamen suchen */
+function csvRows(t){const d=[";","\t",","].map(c=>[c,(t.split("\n")[0].match(new RegExp(c==="\t"?"\t":"\\"+c,"g"))||[]).length]).sort((a,b)=>b[1]-a[1])[0][0];
+  const rows=[];let row=[],f="",q=false;for(let i=0;i<t.length&&rows.length<3000;i++){const c=t[i];
+    if(q){if(c==='"'){if(t[i+1]==='"'){f+='"';i++}else q=false}else f+=c}
+    else if(c==='"')q=true;else if(c===d){row.push(f);f=""}else if(c==="\n"||c==="\r"){if(c==="\r"&&t[i+1]==="\n")i++;row.push(f);rows.push(row);row=[];f=""}else f+=c}
+  if(f||row.length){row.push(f);rows.push(row)}return rows.filter(r=>r.some(x=>x.trim()))}
+const numx=s=>{s=String(s||"").trim().replace(/[^\d.,-]/g,"");if(!s)return NaN;if(s.includes(",")&&s.includes("."))s=s.lastIndexOf(",")>s.lastIndexOf(".")?s.replace(/\./g,"").replace(",","."):s.replace(/,/g,"");else s=s.replace(",",".");return parseFloat(s)};
+function parseDate(s){s=String(s||"").trim();let m=/^(\d{1,2})\.(\d{1,2})\.(\d{4})(?:[ ,T]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/.exec(s);if(m)return +new Date(+m[3],m[2]-1,+m[1],+(m[4]||12),+(m[5]||0),+(m[6]||0));
+  m=/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/.exec(s);if(m)return +new Date(+m[1],m[2]-1,+m[3],+(m[4]||12),+(m[5]||0),+(m[6]||0));const t=Date.parse(s);return isFinite(t)?t:NaN}
+function parseCSV(t){const R=csvRows(t);if(R.length<2)throw new Error("Die CSV-Datei ist leer.");const H=R[0].map(h=>h.trim().replace(/^﻿/,"").toLowerCase());
+  const col=(...res)=>{for(const re of res){const i=H.findIndex(h=>re.test(h));if(i>=0)return i}return -1};
+  const cT=col(/^(aktivitätstyp|activity type|sportart|sport|type|typ)$/),cD=col(/^(datum|date|startzeit|start time|start)$/),cK=col(/^(distanz|distance|strecke)$/,/^(distanz|distance)/),
+    cZ=col(/^(zeit|time)$/,/^(bewegungszeit|moving time)$/,/^(verstrichene zeit|elapsed time|dauer|duration)$/),cH=col(/^(ø herzfrequenz|durchschn\. herzfrequenz|avg hr|average heart rate|avg heart rate)$/);
+  if(cD<0||(cK<0&&cZ<0))throw new Error("In der CSV-Datei fehlen die Spalten für Datum, Distanz oder Zeit.");
+  return R.slice(1).filter(r=>r[cD]&&r[cD].trim().toLowerCase()!==H[cD]).map(r=>{let km=cK>=0?numx(r[cK]):0;if(km>300)km/=1000;const ts=parseDate(r[cD]);
+    return {ts,km:isFinite(km)?Math.round(km*100)/100:0,sec:cZ>=0?parseDur((r[cZ]||"").split(/[.,]/)[0].includes(":")?r[cZ].replace(/[.,]\d+$/,""):r[cZ]):0,splits:[],hr:cH>=0&&numx(r[cH])>30?Math.round(numx(r[cH])):null,sport:cT>=0?(r[cT]||"").trim():"",src:"CSV"}}).filter(x=>isFinite(x.ts))}
+async function parseFile(name,buf){const u8=new Uint8Array(buf);
+  if(u8[0]===0x50&&u8[1]===0x4B){const fs=await unzip(buf),out=[];for(const f of fs)out.push(...await parseFile(f.name,f.buf));return out}
+  if(buf.byteLength>=12&&String.fromCharCode(u8[8],u8[9],u8[10],u8[11])===".FIT")return parseFIT(buf);
+  const t=new TextDecoder().decode(u8).replace(/^﻿/,""),s=t.trimStart();
+  if(s.startsWith("<")){const doc=new DOMParser().parseFromString(t,"application/xml");if(tag(doc,"parsererror").length)throw new Error("Die Datei ist beschädigt.");
+    const root=doc.documentElement.localName;if(root==="gpx")return parseGPX(doc);if(root==="TrainingCenterDatabase")return parseTCX(doc);throw new Error("Unbekanntes Format.")}
+  if(/\.csv$/i.test(name)||/[,;\t]/.test(s.split("\n")[0]))return parseCSV(t);
+  throw new Error("Unbekanntes Format. Möglich sind GPX, TCX, FIT, ZIP oder CSV.")}
+async function importRuns(files){rimp={busy:true,items:[],err:[]};sheetMode="rimp";showSheet();renderRimp();
+  for(const f of [...files].slice(0,50)){try{if(f.size>3e7)throw new Error("Die Datei ist zu groß.");const rs=await parseFile(f.name,await f.arrayBuffer());if(!rs.length)throw new Error("Darin ist kein Lauf.");
+      rs.forEach(r=>rimp.items.push(Object.assign(r,{file:f.name})))}catch(e){rimp.err.push(`${f.name}: ${e.message||"lässt sich nicht lesen"}`)}}
+  const mine=myRuns(),seen=[];rimp.items.sort((a,b)=>b.ts-a.ts);
+  for(const r of rimp.items){const same=x=>Math.abs(x.ts-r.ts)<10*60e3||(dayKey(x.ts)===dayKey(r.ts)&&x.km>0&&r.km>0&&Math.abs(x.km-r.km)<=Math.max(.3,r.km*.05));
+    const isRun=!r.sport||RUNWORDS.test(r.sport);
+    r.why=!isRun?`kein Lauf (${sportDe(r.sport)})`:mine.some(same)?"schon eingetragen":seen.some(same)?"doppelt in der Auswahl":!r.km&&!r.sec?"ohne Strecke und Zeit":"";r.sel=!r.why;if(isRun&&!r.why)seen.push(r)}
+  rimp.busy=false;if(sheetMode==="rimp")renderRimp()}
+function renderRimp(){const R=rimp,n=R.items.filter(x=>x.sel).length;
+  $("#sheet").innerHTML=`<div class="bar"><span class="sub">Läufe aus Datei</span><button class="icon" id="close" aria-label="Schließen">${ICON.close}</button></div>
+  <div class="wrap" style="padding-top:4px"><h2 id="sh-title">${R.busy?"Lese Dateien …":R.items.length?"Gefundene Läufe":"Nichts gefunden"}</h2>
+  ${R.err.map(e=>`<div class="msg">${esc(e)}</div>`).join("")}
+  ${R.items.length?`<div class="sub">Tippe an, was übernommen werden soll.</div>${R.items.map((r,i)=>`<button class="tog" data-rsel="${i}" aria-pressed="${r.sel}"><span><b>${esc(fmtDay(r.ts))} · ${r.km?dec(r.km)+" km":""}${r.km&&r.sec?" · ":""}${r.sec?dur(r.sec):""}</b><span class="sub" style="display:block;font-size:13px">${[pace(r),r.hr?"Ø Puls "+r.hr:"",r.splits.length?r.splits.length+" Kilometerzeiten":"",r.sport&&!RUNWORDS.test(r.sport)?"":"",r.why].filter(Boolean).map(esc).join(" · ")}</span></span><span class="sw" aria-hidden="true"></span></button>`).join("")}
+   <button class="cta" id="rimpgo" ${n?"":"disabled"}>${n===1?"Lauf übernehmen":`${n} Läufe übernehmen`}</button>${n>1?'<p class="sub" style="font-size:13px">Beschwerden trägst du danach pro Lauf nach, indem du ihn antippst.</p>':""}`:""}</div>`}
+function rimpGo(){const pr=prof(),sel=rimp.items.filter(x=>x.sel).map(r=>({id:uid("r"),ts:Math.min(r.ts,Date.now()),pid:pr.id,km:Math.min(500,r.km),sec:Math.min(360000,r.sec),pain:null,painLabel:pr.pain,note:"",splits:r.splits.slice(0,300),hr:r.hr,src:r.src}));
+  if(sel.length===1){const r=sel[0];r.id=null;erun=r;erunDel=false;rimp=null;sheetMode="run";renderRunSheet();$("#sheet").scrollTop=0;return}
+  const old=runs;runs=[...sel,...runs];if(!saveRuns()){runs=old;toast("Speichern hat nicht geklappt");return}rimp=null;closeSheet();toast(`${sel.length} Läufe übernommen`)}
+function splitsHTML(r){if(!r.splits||!r.splits.length)return "";const mx=Math.max(...r.splits),mn=Math.min(...r.splits);
+  return `<h3 style="margin-top:20px">Kilometerzeiten</h3><div class="splits">${r.splits.map((s,i)=>`<div><span>${i+1}</span><i style="width:${Math.round(30+70*(s-mn)/((mx-mn)||1))}%"></i><b>${mmss(s)}</b></div>`).join("")}</div><div class="sub" style="font-size:13px">Kürzerer Balken = schnellerer Kilometer.</div>`}
 
 /* ---------- Eigene Übungen ---------- */
 let ecust=null;
@@ -660,7 +780,8 @@ function cleanBackup(d){
     return {id:sid(p.id),name:str(p.name,40)||"Profil",pain:str(p.pain,40),tpl:Object.hasOwn(TPL,p.tpl)?p.tpl:"leer",goal:int(p.goal,1,14,3),modes}});
   const lg=arr(d.logs).filter(l=>l&&tsOk(l.ts)).map(l=>{const entries={};for(const [id,s] of Object.entries(l.entries||{})){if(!known(id)){lost++;continue}entries[id]=arr(s).filter(x=>x&&typeof x==="object").map(x=>({w:nw(x.w),r:nw(x.r),ok:!!x.ok}))}
     return {id:l.id&&/^[\w-]{1,60}$/.test(l.id)?l.id:uid("l"),ts:l.ts,pid:str(l.pid,60),plan:str(l.plan,60),title:str(l.title,100),entries,pain:pn(l.pain),painLabel:str(l.painLabel,40),note:str(l.note,1000)}});
-  const rn=arr(d.runs).filter(r=>r&&tsOk(r.ts)).map(r=>({id:sid(r.id),ts:r.ts,pid:str(r.pid,60),km:Math.min(500,Math.max(0,num(r.km))),sec:int(r.sec,0,360000,0),pain:pn(r.pain),painLabel:str(r.painLabel,40),note:str(r.note,1000)}));
+  const rn=arr(d.runs).filter(r=>r&&tsOk(r.ts)).map(r=>{const o={id:sid(r.id),ts:r.ts,pid:str(r.pid,60),km:Math.min(500,Math.max(0,num(r.km))),sec:int(r.sec,0,360000,0),pain:pn(r.pain),painLabel:str(r.painLabel,40),note:str(r.note,1000)};
+    const sp=arr(r.splits).map(x=>int(x,1,36000,0)).filter(Boolean).slice(0,300);if(sp.length)o.splits=sp;const hr=int(r.hr,30,250,0);if(hr)o.hr=hr;if(["GPX","TCX","FIT","CSV"].includes(r.src))o.src=r.src;return o});
   return {profiles:pr,logs:lg,runs:rn,custom:cust,settings:d.settings,gen:d.gen,lost,created:d.created};
 }
 function cleanSet(x){const o=Object.assign({},set);if(x&&typeof x==="object"){for(const k of ["sound","loud","awake"])if(typeof x[k]==="boolean")o[k]=x[k];if(BARS.includes(x.bar))o.bar=x.bar;if(Array.isArray(x.plates))o.plates=PLATES.filter(p=>x.plates.includes(p));if(typeof x.backup==="number")o.backup=x.backup}return o}
@@ -743,6 +864,8 @@ function xClick(b){const d=b.dataset;
   if(d.plbar){set.bar=+d.plbar;saveSet();keepTop(renderPlates);return true}
   if(d.plp){const v=+d.plp;set.plates=set.plates.includes(v)?set.plates.filter(x=>x!==v):PLATES.filter(x=>x===v||set.plates.includes(x));saveSet();keepTop(renderPlates);return true}
   if(b.id==="pluse"){const t=num(platesW),l=t&&t<=500?loadPlates(t,set.bar,set.plates):null;if(l){const s=sets(plan(),open),x=s.find(x=>!x.ok)||s[s.length-1];x.w=String(l.total);persist();toast(dec(l.total)+" kg übernommen")}closeSheet();return true}
+  if(d.rsel!=null){const r=rimp.items[+d.rsel];r.sel=!r.sel;keepTop(renderRimp);return true}
+  if(b.id==="rimpgo"){rimpGo();return true}
   if(b.id==="runnew"){const p=prof();erun={id:null,ts:Date.now(),km:0,sec:0,pain:null,painLabel:p.pain,note:""};erunDel=false;sheetMode="run";showSheet();renderRunSheet();return true}
   if(d.run){const r=runs.find(x=>x.id===d.run);if(r){erun=clone(r);erunDel=false;sheetMode="run";showSheet();renderRunSheet()}return true}
   if(d.rp!=null){readRun();const v=+d.rp;erun.pain=erun.pain===v?null:v;keepTop(renderRunSheet);return true}
@@ -764,14 +887,14 @@ function readRun(){erun.ts=atDay($("#rdate").value,erun.ts);erun.km=Math.min(500
 function xInput(i){const d=i.dataset;
   if(i.id==="gans"){gen.ans=i.value;return true}
   if(i.id==="plw"){platesW=i.value.replace(",",".");$("#plres").innerHTML=platesRes();return true}
-  if(i.id==="bkfile"){return true}
+  if(i.id==="bkfile"||i.id==="runfile"){return true}
   if(sheetMode==="log"&&elog&&!$("#sheet").hidden){if(d.le){elog.entries[d.le][+d.li][d.lf]=i.value.trim().replace(",",".");return true}if(i.id==="lnote"){elog.note=i.value.trim();return true}if(i.id==="ldate"){elog.ts=atDay(i.value,elog.ts);return true}}
   if(d.cf&&ecust){if(d.cf==="how")ecust.how=i.value.split("\n");else if(d.cf==="rest"){const v=parseInt(i.value,10);ecust.rest=v>=0&&v<=600?v:60}else ecust[d.cf]=i.value;return true}
   return false}
-document.addEventListener("change",ev=>{if(ev.target.id==="bkfile"&&ev.target.files[0])pickFile(ev.target.files[0])});
+document.addEventListener("change",ev=>{const t=ev.target;if(t.id==="bkfile"&&t.files[0])pickFile(t.files[0]);if(t.id==="runfile"&&t.files.length){importRuns(t.files);t.value=""}});
 
 /* ---------- boot ---------- */
-const APPV="1.0";
+const APPV="1.1";
 let updW=null;
 (function boot(){
   const d=load("tk3",null);if(d){activeId=d.activeId||null;mode=d.mode||null;planId=d.planId||null;draft=d.draft||{};order=d.order||{};swaps=d.swaps||{};

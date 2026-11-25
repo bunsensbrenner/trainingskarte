@@ -1,0 +1,5 @@
+﻿Aktivitätstyp,Datum,Favorit,Titel,Distanz,Kalorien,Zeit,Ø Herzfrequenz,Maximale Herzfrequenz,Beste Rundenzeit
+Laufen,2026-11-22 08:30:00,false,"Berlin Laufen","5,00","350","00:30:00","145","170","00:05:40"
+Radfahren,2026-11-21 10:00:00,false,"Rad","20,10","500","00:40:00","120","150","00:10:00"
+Laufen,2026-10-30 18:00:00,false,"Abendlauf","10,52","800","00:58:31.4","150","172","00:05:20"
+Laufband,2026-10-28 18:00:00,false,"Laufband","6,00","400","00:33:00","--","--","--"

@@ -166,3 +166,8 @@ button.log{width:100%;border:0;border-bottom:1px solid var(--line);background:no
 .bk{fill:var(--mute)}.bp{fill:var(--acc)}
 .plv{display:flex;align-items:center;gap:3px;height:100px;margin-top:14px}.plv i{width:14px;background:var(--acc);border-radius:3px}.plv .rod{width:56px;height:8px;background:var(--far)}.plv .rod.s{width:26px}
 .sm svg{width:20px;height:20px}
+.help{margin-top:12px;background:var(--card);border-radius:14px;padding:0 14px;font-size:15px}
+.help summary{min-height:48px;display:flex;align-items:center;font-weight:700;color:var(--acc);cursor:pointer;list-style:none}.help summary::-webkit-details-marker{display:none}
+.help p{margin:0 0 12px}
+.splits{display:grid;gap:4px;margin-top:8px}.splits div{display:grid;grid-template-columns:26px minmax(0,1fr) 56px;gap:8px;align-items:center;font-size:14px}
+.splits span{color:var(--mute);text-align:right}.splits i{display:block;height:14px;border-radius:0 4px 4px 0;background:var(--acc)}.splits b{font-variant-numeric:tabular-nums}
