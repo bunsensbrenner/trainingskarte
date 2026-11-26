@@ -127,7 +127,7 @@ function renderPicker(adding){
 function renderLibSheet(){
   const e=EX[libId],last=lastFor(e.id);
   $("#sheet").innerHTML=`<div class="bar"><span class="sub">${CATS.find(c=>c[0]===e.cat)[1]} · ${e.eq?"mit Gerät":"ohne Gerät"}${e.off?" · ausgeblendet":""}</span><button class="icon" id="close" aria-label="Schließen">${ICON.close}</button></div>
-  <div class="stage" id="stage">${svg(e,0)}</div>
+  <div class="stage" id="stage">${svg(e,0)}${b3d(e)}</div>
   <div class="wrap" style="padding-top:16px"><h2 id="sh-title">${esc(e.name)}</h2>
   <div class="target"><div><b>${esc(e.reps)}</b><span>${e.type==="s"?"Sekunden":e.type==="m"?"Meter":"Wiederholungen"} pro Satz</span></div>${e.rest?`<div><b>${e.rest} s</b><span>Pause</span></div>`:""}</div>
   <ol class="steps">${e.how.map(h=>`<li>${esc(h)}</li>`).join("")}</ol>
@@ -169,7 +169,7 @@ function renderSheet(){
   const hit=last&&tr&&last.length>=r.sets&&last.every(x=>+x.r>=tr);
   const tip=hit?(e.type==="kg"?"Letztes Mal alles geschafft: heute etwas mehr Gewicht.":"Letztes Mal alles geschafft: schwierigere Variante oder länger."):"";
   $("#sheet").innerHTML=`<div class="bar"><span class="sub">${ord(p).indexOf(open)+1} von ${p.ex.length} · ${esc(p.title)}</span><button class="icon" id="close" aria-label="Schließen">${ICON.close}</button></div>
-  <div class="stage" id="stage">${svg(e,0)}</div>
+  <div class="stage" id="stage">${svg(e,0)}${b3d(e)}</div>
   <div class="wrap" style="padding-top:16px">
    <h2 id="sh-title">${esc(e.name)}</h2>
    <div class="target"><div><b>${r.sets} × ${esc(r.reps)}</b><span>${e.type==="s"?"Sekunden":e.type==="m"?"Meter":"Wiederholungen"}</span></div>${e.rest?`<div><b>${e.rest} s</b><span>Pause</span></div>`:""}</div>
@@ -189,9 +189,15 @@ const setRows=(e,s)=>s.map((x,i)=>{const h=hint(e.id,s,i);return `<div class="se
      :`<input inputmode="decimal" placeholder="${esc(h.w?dec(h.w):unit[e.type])}" aria-label="Satz ${i+1} Gewicht" data-i="${i}" data-f="w" value="${esc(dec(x.w))}"><input inputmode="numeric" placeholder="${esc(h.r?dec(h.r):"Wdh.")}" aria-label="Satz ${i+1} Wiederholungen" data-i="${i}" data-f="r" value="${esc(dec(x.r))}">`}
      <button class="tick" data-tick="${i}" aria-pressed="${!!x.ok}" aria-label="Satz ${i+1} erledigt">${ICON.check}</button></div>`}).join("");
 const redrawSets=()=>{if($("#sheet").hidden||sheetMode!=="train"||picker||open<0)return;const p=plan(),el=$("#sheet .sets");if(el)el.innerHTML=setRows(EX[rowAt(p,open).id],sets(p,open))};
+/* 3D-Ansicht: fig3d.js wird erst beim Antippen geladen */
+const D3=new Set(["goblet"]);
+const gl3=(()=>{let ok;return()=>{if(ok===undefined){try{const c=document.createElement("canvas");ok=!!(c.getContext("webgl2")||c.getContext("webgl"))}catch(e){ok=false}}return ok}})();
+const b3d=e=>e&&e.A&&!e.custom&&D3.has(e.id)&&gl3()?`<button class="b3d" data-3d="${e.id}" aria-label="${esc(e.name)} in 3D ansehen"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9"/></svg>3D</span></button>`:"";
+function open3D(id){const e=EX[id];if(!e)return;cancelAnimationFrame(raf);
+  import("./fig3d.js").then(m=>m.open3d(e,{onClose:()=>{if(!$("#sheet").hidden&&$("#stage"))animate(e)}})).catch(()=>{toast("3D-Ansicht geht auf diesem Gerät nicht");animate(e)})}
 function animate(e){
   cancelAnimationFrame(raf);const st=$("#stage");if(!st||!e.A)return;
-  if(matchMedia("(prefers-reduced-motion: reduce)").matches){st.innerHTML=`<div style="display:grid;grid-template-columns:1fr 1fr;width:100%;height:100%">${svg(e,0)}${svg(e,1)}</div>`;return}
+  if(matchMedia("(prefers-reduced-motion: reduce)").matches){st.innerHTML=`<div style="display:grid;grid-template-columns:1fr 1fr;width:100%;height:100%">${svg(e,0)}${svg(e,1)}</div>`+b3d(e);return}
   const T=3200,t0=performance.now();
   const loop=now=>{const p=((now-t0)%T)/T;let x=p<.5?p*2:2-p*2;x=Math.min(1,Math.max(0,(x-.12)/.76));x=x*x*(3-2*x);
     st.firstElementChild.innerHTML=figSVG(e,x);raf=requestAnimationFrame(loop)};
@@ -840,6 +846,7 @@ function kiUse(){const g=gen;try{const t=g.ans||"",a=t.indexOf("{"),z=t.lastInde
 
 /* ---------- Klicks und Eingaben der neuen Teile ---------- */
 function xClick(b){const d=b.dataset;
+  if(d["3d"]){open3D(d["3d"]);return true}
   if(b.id==="instx"){$("#install").hidden=true;try{sessionStorage.setItem("tk3-noinst","1")}catch(e){}return true}
   if(b.id==="updgo"){if(updW)updW.postMessage("skip");return true}
   if(b.id==="setbtn"){openSet();return true}
@@ -894,7 +901,7 @@ function xInput(i){const d=i.dataset;
 document.addEventListener("change",ev=>{const t=ev.target;if(t.id==="bkfile"&&t.files[0])pickFile(t.files[0]);if(t.id==="runfile"&&t.files.length){importRuns(t.files);t.value=""}});
 
 /* ---------- boot ---------- */
-const APPV="1.1";
+const APPV="1.2";
 let updW=null;
 (function boot(){
   const d=load("tk3",null);if(d){activeId=d.activeId||null;mode=d.mode||null;planId=d.planId||null;draft=d.draft||{};order=d.order||{};swaps=d.swaps||{};
