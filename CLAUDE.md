@@ -36,7 +36,7 @@ Web-App, die man in Safari über »Zum Home-Bildschirm« installiert. Läuft off
 - `testdaten/` enthält künstliche Testdateien (Berlin, keine echten Läufe). Mit echten Garmin-Dateien noch nicht geprüft; die CSV-Spaltennamen von Garmin sind geraten und werden nach Namen gesucht.
 
 ## 3D-Figuren (seit 1.2, im Aufbau)
-- Die 3D-Puppe rechnet die Seitenansicht-Posen aus `uebungen.js` in den Raum um (Schulter-/Hüftbreite ergänzt). Extra-Angaben je Übung in `X3` in `fig3d.js`.
+- Die 3D-Puppe rechnet die Seitenansicht-Posen aus `uebungen.js` in den Raum um (Schulter-/Hüftbreite ergänzt). Extra-Angaben je Übung in `X3` in `fig3d-daten.js`.
 - Technik-Hinweise (seit 1.3): Knopf »Hinweise« in der 3D-Ansicht, je Hinweis Linien/Winkelbögen/Schilder und passende Ansicht. Daten in `H3` in `fig3d-daten.js` (Bausteine spine, dir, angle, straight, plumb, track, heel, mark; Erklärung oben in der Datei). Grün = im guten Bereich, Gelb = Grenze. Winkel sind allgemeine, vorsichtige Richtwerte. Grenzwerte so gewählt, dass die Vorführ-Figur grün bleibt; gelb nur mit Absicht (Kniewinkel bei Goblet/Box Squat). Prüfen: in der Browser-Konsole `checkHints(EX.id)` aus fig3d.js.
 - Welche Übungen den 3D-Knopf haben, steht in `D3` in `app.js`. Stand 1.4: 47 Übungen (alle, die sich vor/zurück bewegen). Noch ohne 3D (Schritt 3): sideplank, sideraise, hipabd, bandwalk, legswingside, itbstretch, latraise, cablefly, revfly, hipdrop, hiprot, anklerot, wallsitband – die sind in 2D von vorn gezeichnet oder bewegen sich seitlich.
 - Wände werden durchsichtig, wenn sie zwischen Kamera und Figur stehen. `snap()` in fig3d.js macht ein Standbild (für Tests und spätere Vorschaubilder).
