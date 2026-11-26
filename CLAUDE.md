@@ -37,10 +37,14 @@ Web-App, die man in Safari über »Zum Home-Bildschirm« installiert. Läuft off
 
 ## 3D-Figuren (seit 1.2, im Aufbau)
 - Die 3D-Puppe rechnet die Seitenansicht-Posen aus `uebungen.js` in den Raum um (Schulter-/Hüftbreite ergänzt). Extra-Angaben je Übung in `X3` in `fig3d-daten.js`.
+- Seit 1.5 echtes 3D-Skelett (`build()` in fig3d.js): zusätzlich seitlich abspreizen (ab, lb), waagerecht drehen (hy, ly), Oberkörper/Becken kippen (tl, pt), ganze Figur kippen (roll). Seitliche Übungen haben eigene 3D-Posen (`K`) und Geräte (`props3`).
+- Bodenkontakt: Füße werden am Boden flach aufgesetzt; `reach` dreht die Beine bis zum Boden (Liegestütz, Unterarmstütz, Pike); `pin` hält einen Fuß fest (Bulgarian Split Squat).
+- Prüfen: in der Browser-Konsole `audit(EX.id)` (Geräte im Körper, Teile unter dem Boden) und `checkHints(EX.id)` aus fig3d.js. Stand 1.5: alles sauber bis auf 2 Einheiten bei Kurzhantel-Bankdrücken (Hantel berührt Brust).
+- Posen in `uebungen.js` korrigiert (gilt auch für 2D): Liegestütz, Rudern am Kabel, Kreuzheben, Rumänisches Kreuzheben, Hip Thrust, (einbeinige) Glute Bridge, Australian Rows.
 - Technik-Hinweise (seit 1.3): Knopf »Hinweise« in der 3D-Ansicht, je Hinweis Linien/Winkelbögen/Schilder und passende Ansicht. Daten in `H3` in `fig3d-daten.js` (Bausteine spine, dir, angle, straight, plumb, track, heel, mark; Erklärung oben in der Datei). Grün = im guten Bereich, Gelb = Grenze. Winkel sind allgemeine, vorsichtige Richtwerte. Grenzwerte so gewählt, dass die Vorführ-Figur grün bleibt; gelb nur mit Absicht (Kniewinkel bei Goblet/Box Squat). Prüfen: in der Browser-Konsole `checkHints(EX.id)` aus fig3d.js.
-- Welche Übungen den 3D-Knopf haben, steht in `D3` in `app.js`. Stand 1.4: 47 Übungen (alle, die sich vor/zurück bewegen). Noch ohne 3D (Schritt 3): sideplank, sideraise, hipabd, bandwalk, legswingside, itbstretch, latraise, cablefly, revfly, hipdrop, hiprot, anklerot, wallsitband – die sind in 2D von vorn gezeichnet oder bewegen sich seitlich.
+- Welche Übungen den 3D-Knopf haben, steht in `D3` in `app.js` (muss zu den Schlüsseln von `X3` passen). Stand 1.5: alle 60 eingebauten Übungen; eigene Übungen haben keine Figur.
 - Wände werden durchsichtig, wenn sie zwischen Kamera und Figur stehen. `snap()` in fig3d.js macht ein Standbild (für Tests und spätere Vorschaubilder).
-- Plan: 2) erledigt (1.4), 3) seitliche Übungen (Seitheben, Seitstütz, Butterfly, Abduktion …) von Hand in 3D, 4) kleine Figuren auf den Karten in 3D (Tempo prüfen), 5) online.
+- Plan: 2) erledigt (1.4), 3) erledigt (1.5), 4) offen: kleine Figuren auf den Karten in 3D (Tempo auf dem iPhone prüfen).
 
 ## Bekannte Grenzen
 - Bei gesperrtem Handy klingelt der Timer nicht zuverlässig.

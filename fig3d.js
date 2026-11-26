@@ -146,7 +146,8 @@ function calc(d, j, t) {
     case "angle": { const deg = tmp.subVectors(j[d.a], j[d.at]).angleTo(tmp2.subVectors(j[d.b], j[d.at])) * DEG; return { deg, st: on ? +inRange(d, deg) : -1, text: `${d.name} ${Math.round(deg)}°` }; }
     case "straight": { const deg = tmp.subVectors(j[d.a], j[d.at]).angleTo(tmp2.subVectors(j[d.b], j[d.at])) * DEG; return { deg, st: on ? +(deg >= d.min - 0.5) : -1, text: d.label }; }
     case "plumb": { const off = Math.abs(j[d.p].x - j[d.ref].x - (d.dx || 0)); return { deg: off, st: on ? +(off <= d.tol) : -1, text: d.label }; }
-    case "track": { const s = d.side, a = j["hp" + s], b = j["to" + s], k = j["k" + s]; const t0 = (k.y - b.y) / ((a.y - b.y) || 1), zl = b.z + (a.z - b.z) * t0, off = Math.abs(k.z - zl); return { deg: off, st: on ? +(off < 3) : -1, text: "Knie über Fußspitze" }; }
+    case "track": { const sd = d.side, sg = sd === 1 ? 1 : -1, a = j["hp" + sd], b = j["to" + sd], k = j["k" + sd]; const t0 = (k.y - b.y) / ((a.y - b.y) || 1), zl = b.z + (a.z - b.z) * t0, off = (k.z - zl) * sg; return { deg: off, st: on ? +(off > -3) : -1, text: "Knie über Fußspitze" }; } // nach innen = Problem
+    case "level": { const v = tmp.subVectors(j[d.b], j[d.a]); const deg = Math.asin(Math.min(1, Math.abs(v.y) / (v.length() || 1))) * DEG; return { deg, st: on ? (d.max != null ? +(deg <= d.max + 0.5) : 2) : -1, text: `${d.name} ${Math.round(deg)}°` }; }
     case "heel": { const y = Math.max(...(d.sides || [1, 2]).map(i => j["an" + i].y)); return { deg: y, st: on ? +(y < 9) : -1, text: d.label || "Fersen am Boden" }; }
     case "spine": return { st: 1, text: d.label || "Rücken gerade" };
     case "mark": return { st: 2, text: d.label };
@@ -222,9 +223,10 @@ function makeHints(scene, defs, C, wrap) {
       } else if (d.k === "straight") {
         const t = mk(tube, mat(C.guide, 0.8)), dot = mk(ball, mat(C.ok)); dot.scale.setScalar(3); it.objs.push(t, dot); it.paint = [dot];
         draw = j => {
-          const a = j[d.a].clone().add(new THREE.Vector3(0, 0, 22)), b = j[d.b].clone(); b.z = 22;
-          seg(t, a, b, 0.6); dot.position.copy(j[d.at]).setZ(22);
-          it.pos.copy(j[d.at]).add(new THREE.Vector3(0, 14, 22));
+          const o = d.off ? new THREE.Vector3(...d.off) : null;
+          const put = p => o ? p.clone().add(o) : p.clone().setZ(22);
+          seg(t, put(j[d.a]), put(j[d.b]), 0.6); dot.position.copy(put(j[d.at]));
+          it.pos.copy(put(j[d.at])).add(new THREE.Vector3(0, 14, 0));
         };
       } else if (d.k === "plumb") {
         const t = mk(tube, mat(C.guide, 0.8)), dot = mk(ball, mat(C.ok)); dot.scale.setScalar(3); it.objs.push(t, dot); it.paint = [dot];
@@ -251,6 +253,15 @@ function makeHints(scene, defs, C, wrap) {
         draw = j => {
           discs.forEach((m, i) => { const an = j["an" + sides[i]]; m.position.set(an.x - 1, 0.4, an.z); });
           it.pos.copy(j["an" + sides[0]]).add(new THREE.Vector3(-6, 10, 6));
+        };
+      } else if (d.k === "level") {
+        const t = mk(tube, mat(C.guide, 0.9)), ref = mk(tube, mat(C.guide, 0.35)); it.objs.push(t, ref); it.paint = [t];
+        draw = j => {
+          const a = j[d.a], b = j[d.b], v = new THREE.Vector3().subVectors(b, a).multiplyScalar(0.6);
+          seg(t, a.clone().sub(v), b.clone().add(v), 0.8);
+          const flat = v.clone(); flat.y = 0;
+          seg(ref, a.clone().sub(flat), a.clone().add(flat).add(flat).add(new THREE.Vector3().subVectors(b, a).setY(0)), 0.4);
+          it.pos.copy(b).add(v).add(new THREE.Vector3(8, 10, 0));
         };
       } else if (d.k === "mark") {
         const dot = mk(new THREE.SphereGeometry(1, 16, 12), mat(C.guide, 0.5)); dot.scale.setScalar(4.5); it.objs.push(dot);
@@ -482,6 +493,7 @@ function framing(ex) {
   const bb = new THREE.Box3();
   for (const t of [0, 0.5, 1]) for (const p of Object.values(joints(ex, t))) bb.expandByPoint(p);
   for (const pr of ex.props || []) if ((pr.t === "box" && !(pr.w <= 8 && 124 - pr.y > 100)) || pr.t === "bench") { bb.expandByPoint(new THREE.Vector3(pr.x - 100, 0, 0)); bb.expandByPoint(new THREE.Vector3(pr.x + pr.w - 100, 0, 0)); }
+  for (const pr of (X3[ex.id] || {}).props3 || []) if (pr.t === "box" || pr.t === "mat") { bb.expandByPoint(new THREE.Vector3(pr.c[0] - pr.s[0] / 2, 0, pr.c[2] - pr.s[2] / 2)); bb.expandByPoint(new THREE.Vector3(pr.c[0] + pr.s[0] / 2, pr.c[1] + pr.s[1] / 2, pr.c[2] + pr.s[2] / 2)); }
   bb.expandByPoint(new THREE.Vector3(bb.min.x, 0, 0));
   const target = bb.getCenter(new THREE.Vector3());
   const size = bb.getSize(new THREE.Vector3());
@@ -555,7 +567,7 @@ export function open3d(ex, opts = {}) {
   box.innerHTML = `<div class="v3bar"><b></b><button class="icon" data-v3="close" aria-label="3D-Ansicht schließen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
   <div class="v3can"><div class="v3hint">Mit einem Finger drehen · mit zwei Fingern zoomen</div></div>
   <div class="v3ctl">
-    <div class="seg v3views"><button data-view="front">Vorne</button><button data-view="diag" aria-pressed="true">Schräg</button><button data-view="side">Seite</button><button data-view="top">Oben</button></div>
+    <div class="seg v3views"><button data-view="front">Vorne</button><button data-view="diag">Schräg</button><button data-view="side">Seite</button><button data-view="top">Oben</button></div>
     <div class="v3hints" hidden><div class="chips v3chips"></div><p class="v3txt"></p></div>
     <div class="v3row"><button class="cta sec" data-v3="play"></button><button class="cta sec" data-v3="slow" aria-pressed="false">Zeitlupe</button></div>
   </div>`;
@@ -589,10 +601,11 @@ export function open3d(ex, opts = {}) {
   const camera = new THREE.PerspectiveCamera(34, 1, 1, 2000);
 
   const { target, base, span } = framing(ex);
+  for (const b of box.querySelectorAll("[data-view]")) b.setAttribute("aria-pressed", String(b.dataset.view === ((X3[ex.id] || {}).view0 || "diag")));
 
-  const VIEWS = { front: [90, 6], diag: [42, 14], side: [0, 4], top: [30, 72], back: [-90, 10] };
-  const rad = Math.PI / 180;
-  let az = 42 * rad, el = 14 * rad, dist = base;
+  const VIEWS = { front: [90, 6], diag: [42, 14], side: [0, 4], top: [30, 72], back: [-90, 10], fdiag: [65, 12] };
+  const rad = Math.PI / 180, v0 = VIEWS[(X3[ex.id] || {}).view0 || "diag"];
+  let az = v0[0] * rad, el = v0[1] * rad, dist = base;
   let azT = az, elT = el, distT = dist;
 
   let playing = !reduce, slow = false, ph = reduce ? 0.5 : 0, last = performance.now(), raf = 0, dirty = true;
@@ -669,7 +682,7 @@ export function open3d(ex, opts = {}) {
   cv.addEventListener("pointerup", up);
   cv.addEventListener("pointercancel", up);
   cv.addEventListener("wheel", e => { e.preventDefault(); distT = Math.min(base * 2.2, Math.max(base * 0.45, distT * (1 + e.deltaY * 0.0015))); }, { passive: false });
-  cv.addEventListener("dblclick", () => { const [a, b] = VIEWS.diag; azT = a * rad; elT = b * rad; distT = base; markViews("diag"); });
+  cv.addEventListener("dblclick", () => { azT = v0[0] * rad; elT = v0[1] * rad; distT = base; markViews((X3[ex.id] || {}).view0 || "diag"); });
 
   const onKey = e => { if (e.key === "Escape") { e.preventDefault(); close(); } };
   document.addEventListener("keydown", onKey);
