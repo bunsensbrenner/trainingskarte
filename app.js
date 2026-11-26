@@ -190,7 +190,7 @@ const setRows=(e,s)=>s.map((x,i)=>{const h=hint(e.id,s,i);return `<div class="se
      <button class="tick" data-tick="${i}" aria-pressed="${!!x.ok}" aria-label="Satz ${i+1} erledigt">${ICON.check}</button></div>`}).join("");
 const redrawSets=()=>{if($("#sheet").hidden||sheetMode!=="train"||picker||open<0)return;const p=plan(),el=$("#sheet .sets");if(el)el.innerHTML=setRows(EX[rowAt(p,open).id],sets(p,open))};
 /* 3D-Ansicht: fig3d.js wird erst beim Antippen geladen */
-const D3=new Set(["goblet"]);
+const D3=new Set(["bench","benchbb","latpull","row","shpress","facepull","curl","pushdown","hipthrust","goblet","rdl","stepup","legcurl","calf","pallof","farmer","hollow","pullup","dips","pushup","invrow","bwsquat","stepdown","deadhang","tuck","slbridge","deadbug","legswing","revlunge","askip","buttkick","plank","pikepush","dbrow","deadlift","bulgarian","ohp","frontraise","birddog","balance","glutebridge","onearmrow","dorsiflex","wallsit","walltoeraise","slcalf","tibraise"]);
 const gl3=(()=>{let ok;return()=>{if(ok===undefined){try{const c=document.createElement("canvas");ok=!!(c.getContext("webgl2")||c.getContext("webgl"))}catch(e){ok=false}}return ok}})();
 const b3d=e=>e&&e.A&&!e.custom&&D3.has(e.id)&&gl3()?`<button class="b3d" data-3d="${e.id}" aria-label="${esc(e.name)} in 3D ansehen"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9"/></svg>3D</span></button>`:"";
 function open3D(id){const e=EX[id];if(!e)return;cancelAnimationFrame(raf);
@@ -901,7 +901,7 @@ function xInput(i){const d=i.dataset;
 document.addEventListener("change",ev=>{const t=ev.target;if(t.id==="bkfile"&&t.files[0])pickFile(t.files[0]);if(t.id==="runfile"&&t.files.length){importRuns(t.files);t.value=""}});
 
 /* ---------- boot ---------- */
-const APPV="1.3";
+const APPV="1.4";
 let updW=null;
 (function boot(){
   const d=load("tk3",null);if(d){activeId=d.activeId||null;mode=d.mode||null;planId=d.planId||null;draft=d.draft||{};order=d.order||{};swaps=d.swaps||{};

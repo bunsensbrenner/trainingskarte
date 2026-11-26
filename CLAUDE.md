@@ -11,7 +11,8 @@ Web-App, die man in Safari über »Zum Home-Bildschirm« installiert. Läuft off
 
 ## Dateien
 - `index.html` Grundgerüst · `stil.css` Aussehen · `uebungen.js` Übungen, Figuren, Startpläne · `app.js` Funktionen
-- `fig3d.js` 3D-Ansicht (Gliederpuppe zum Drehen), wird erst beim Antippen von »3D« geladen
+- `fig3d.js` 3D-Ansicht (Gliederpuppe, Geräte, Hinweis-Zeichnungen), wird erst beim Antippen von »3D« geladen
+- `fig3d-daten.js` 3D-Angaben (`X3`: Griffbreite, Seiten gleich, Kabel …) und Technik-Hinweise (`H3`) je Übung
 - `lib/three.module.min.js` Three.js 0.170.0 (MIT, Lizenz in `lib/THREE-LICENSE.txt`), lokal gespeichert, damit nichts aus dem Internet geladen wird
 - `sw.js` Offline-Teil · `manifest.webmanifest`, `icons/` für die Installation
 - `Trainingskarte-Sicherung-Start.json` Daten aus dem Artefakt (persönlich, per .gitignore nicht in Git)
@@ -36,9 +37,10 @@ Web-App, die man in Safari über »Zum Home-Bildschirm« installiert. Läuft off
 
 ## 3D-Figuren (seit 1.2, im Aufbau)
 - Die 3D-Puppe rechnet die Seitenansicht-Posen aus `uebungen.js` in den Raum um (Schulter-/Hüftbreite ergänzt). Extra-Angaben je Übung in `X3` in `fig3d.js`.
-- Technik-Hinweise (seit 1.3): Knopf »Hinweise« in der 3D-Ansicht, je Hinweis Linien/Winkelbögen/Schilder und passende Ansicht. Daten in `H3` in `fig3d.js` (Bausteine spine, lean, track, angle, heel). Grün = im guten Bereich, Gelb = Grenze. Winkel sind allgemeine, vorsichtige Richtwerte. Stand: nur Goblet Squat; bei Schritt 2/3 für alle Übungen mitschreiben.
-- Welche Übungen den 3D-Knopf haben, steht in `D3` in `app.js`. Stand: nur Goblet Squat (Schritt 1).
-- Plan: 2) alle Übungen übernehmen und Geräte in 3D, 3) seitliche Übungen (Seitheben, Seitstütz, Butterfly, Abduktion …) von Hand in 3D, 4) kleine Figuren auf den Karten in 3D (Tempo prüfen), 5) online.
+- Technik-Hinweise (seit 1.3): Knopf »Hinweise« in der 3D-Ansicht, je Hinweis Linien/Winkelbögen/Schilder und passende Ansicht. Daten in `H3` in `fig3d-daten.js` (Bausteine spine, dir, angle, straight, plumb, track, heel, mark; Erklärung oben in der Datei). Grün = im guten Bereich, Gelb = Grenze. Winkel sind allgemeine, vorsichtige Richtwerte. Grenzwerte so gewählt, dass die Vorführ-Figur grün bleibt; gelb nur mit Absicht (Kniewinkel bei Goblet/Box Squat). Prüfen: in der Browser-Konsole `checkHints(EX.id)` aus fig3d.js.
+- Welche Übungen den 3D-Knopf haben, steht in `D3` in `app.js`. Stand 1.4: 47 Übungen (alle, die sich vor/zurück bewegen). Noch ohne 3D (Schritt 3): sideplank, sideraise, hipabd, bandwalk, legswingside, itbstretch, latraise, cablefly, revfly, hipdrop, hiprot, anklerot, wallsitband – die sind in 2D von vorn gezeichnet oder bewegen sich seitlich.
+- Wände werden durchsichtig, wenn sie zwischen Kamera und Figur stehen. `snap()` in fig3d.js macht ein Standbild (für Tests und spätere Vorschaubilder).
+- Plan: 2) erledigt (1.4), 3) seitliche Übungen (Seitheben, Seitstütz, Butterfly, Abduktion …) von Hand in 3D, 4) kleine Figuren auf den Karten in 3D (Tempo prüfen), 5) online.
 
 ## Bekannte Grenzen
 - Bei gesperrtem Handy klingelt der Timer nicht zuverlässig.

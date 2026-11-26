@@ -1,7 +1,7 @@
 // Offline-Teil: speichert die App-Dateien auf dem Handy.
 // Bei jeder neuen Fassung die Nummer erhöhen, sonst bekommen Handys die Änderung nicht.
-const VERSION = "trainingskarte-5";
-const FILES = ["./", "index.html", "stil.css", "uebungen.js", "app.js", "fig3d.js", "lib/three.module.min.js", "manifest.webmanifest",
+const VERSION = "trainingskarte-6";
+const FILES = ["./", "index.html", "stil.css", "uebungen.js", "app.js", "fig3d.js", "fig3d-daten.js", "lib/three.module.min.js", "manifest.webmanifest",
   "icons/icon-180.png", "icons/icon-192.png", "icons/icon-512.png"];
 
 self.addEventListener("install", e => e.waitUntil(

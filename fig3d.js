@@ -1,147 +1,27 @@
 // 3D-Ansicht der Übungsfiguren. Wird erst geladen, wenn jemand auf „3D“ tippt.
 // Nutzt die Bewegungen aus uebungen.js (Seitenansicht) und macht daraus eine Gliederpuppe im Raum.
+// Angaben je Übung (Griffbreite, Hinweise …) stehen in fig3d-daten.js.
 import * as THREE from "./lib/three.module.min.js";
+import { X3, H3 } from "./fig3d-daten.js";
 
 // Breiten, die in der Seitenansicht fehlen (gleiche Einheit wie uebungen.js, ca. 1 = 1,2 cm)
-const SW = 15, HW = 8.5, FW = 9.5;
-// Zusätzliche 3D-Angaben je Übung. hz/ez = halbe Breite zwischen den Händen/Ellbogen.
-// sym = beide Körperseiten gleich bewegen (in der Seitenansicht leicht versetzt gezeichnet).
-const X3 = {
-  goblet: { sym: true, hz: 4.5, ez: 11 },
-};
+const SW = 17, HW = 8.5, FW = 9.5;
 
-const UP = new THREE.Vector3(0, 1, 0), tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3();
+const UP = new THREE.Vector3(0, 1, 0), DOWN = new THREE.Vector3(0, -1, 0), tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3();
+const REF = { up: UP, down: DOWN };
 const seg = (m, a, b, r) => {
   const d = new THREE.Vector3().subVectors(b, a), len = d.length() || 0.001;
   m.position.copy(a).addScaledVector(d, 0.5);
   m.quaternion.setFromUnitVectors(UP, d.divideScalar(len));
   m.scale.set(r, len, r);
 };
-
-// Technik-Hinweise je Übung. Jeder Hinweis: kurzer Name (t), Erklärung (txt), beste Ansicht (view), Zeichnungen (draw).
-// Zeichnungen: spine = Linie am Rücken · lean = Vorneigung gegen die Senkrechte (max) · track = Linie Hüfte–Fußspitze
-// angle = Gelenkwinkel (at, a, b; ok = Mindestwinkel) · heel = Fersen am Boden
-const H3 = {
-  goblet: [
-    { t: "Rücken", view: "side", txt: "Rücken gerade, Brust aufrecht. Der Oberkörper neigt sich höchstens etwa 45° nach vorn.",
-      draw: [{ k: "spine" }, { k: "lean", max: 45 }] },
-    { t: "Knie-Linie", view: "front", txt: "Die Knie zeigen über die Fußspitzen und knicken nicht nach innen.",
-      draw: [{ k: "track", side: 1 }, { k: "track", side: 2 }] },
-    { t: "Kniewinkel", view: "side", txt: "Nur so tief, wie es schmerzfrei geht. Grün heißt: Knie nicht enger als 90°. Gelb: nur, wenn das Knie gut mitmacht.",
-      draw: [{ k: "angle", at: "k1", a: "hp1", b: "an1", ok: 90, name: "Knie" }] },
-    { t: "Fersen", view: "side", txt: "Die Fersen bleiben die ganze Zeit fest am Boden.",
-      draw: [{ k: "heel" }] },
-  ],
-};
-export const hasHints = id => !!H3[id];
-
-function makeHints(scene, defs, C, wrap) {
-  const tube = new THREE.CylinderGeometry(1, 1, 1, 12);
-  const mats = [];
-  const mat = (c, op = 0.95) => { const m = new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: op, depthTest: false, depthWrite: false }); mats.push(m); return m; };
-  const mk = (geo, m) => { const x = new THREE.Mesh(geo, m); x.renderOrder = 10; x.visible = false; scene.add(x); return x; };
-  const items = [];
-  const label = () => { const el = document.createElement("div"); el.className = "v3lab"; wrap.appendChild(el); const L = { el, k: "" }; Object.defineProperty(L, "hidden", { get: () => el.hidden, set: v => { el.hidden = v; } }); el.hidden = true; return L; };
-  const setLab = (L, ok, text) => { const k = (ok ? "1" : "0") + text; if (L.k !== k) { L.k = k; L.el.innerHTML = `<i class="${ok ? "ok" : "warn"}">${ok ? "✓" : "!"}</i>`; L.el.append(text); } };
-
-  // Winkelbogen zwischen zwei Richtungen u und v an Punkt p
-  function arc(o, p, u, v, r) {
-    const ang = u.angleTo(v);
-    if (Math.abs(ang - (o.ang ?? -1)) > 0.004) {
-      o.fill.geometry.dispose(); o.edge.geometry.dispose();
-      o.fill.geometry = new THREE.CircleGeometry(r, 32, 0, ang);
-      o.edge.geometry = new THREE.RingGeometry(r - 0.9, r + 0.6, 32, 1, 0, ang);
-      o.ang = ang;
-    }
-    const x = u.clone().normalize(), y = v.clone().addScaledVector(x, -v.dot(x));
-    if (y.lengthSq() < 1e-6) y.set(0, 0, 1).cross(x);
-    y.normalize();
-    const z = new THREE.Vector3().crossVectors(x, y);
-    const q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, y, z));
-    for (const m of [o.fill, o.edge]) { m.position.copy(p); m.quaternion.copy(q); }
-    return ang * 180 / Math.PI;
-  }
-  const newArc = c => ({ fill: mk(new THREE.BufferGeometry(), mat(c, 0.28)), edge: mk(new THREE.BufferGeometry(), mat(c)) });
-
-  defs.forEach((h, hi) => {
-    for (const d of h.draw) {
-      const it = { hi, objs: [], lab: null, pos: new THREE.Vector3() };
-      if (d.k === "spine") {
-        const t = mk(tube, mat(C.ok)); it.objs.push(t); it.lab = label();
-        it.upd = j => {
-          const dir = tmp.subVectors(j.sh, j.hip).normalize(), off = new THREE.Vector3(-dir.y, dir.x, 0).multiplyScalar(11);
-          const a = j.hip.clone().add(off).addScaledVector(dir, -4), b = j.hd.clone().add(off);
-          seg(t, a, b, 0.9); it.pos.lerpVectors(a, b, 0.7).addScaledVector(off, 1.3);
-          setLab(it.lab, true, "Rücken gerade");
-        };
-      } else if (d.k === "lean") {
-        const ref = mk(tube, mat(C.guide, 0.8)), A = newArc(C.ok); it.objs.push(ref, A.fill, A.edge); it.lab = label();
-        it.upd = j => {
-          const top = j.hip.clone().addScaledVector(UP, 30);
-          seg(ref, j.hip, top, 0.5);
-          const deg = arc(A, j.hip, UP.clone(), tmp.subVectors(j.sh, j.hip), 20);
-          const ok = deg <= d.max + 0.5;
-          for (const m of [A.fill, A.edge]) m.material.color.set(ok ? C.ok : C.warn);
-          it.pos.copy(j.hip).add(new THREE.Vector3(22, 4, 10));
-          setLab(it.lab, ok, `Neigung ${Math.round(deg)}°`);
-        };
-      } else if (d.k === "track") {
-        const t = mk(tube, mat(C.guide, 0.85)), dot = mk(new THREE.TorusGeometry(4.2, 0.7, 8, 24), mat(C.ok));
-        it.objs.push(t, dot);
-        if (d.side === 1) it.lab = label();
-        it.upd = j => {
-          const s = d.side, a = j["hp" + s], b = j["to" + s];
-          seg(t, a, b, 0.6);
-          dot.position.copy(j["k" + s]); dot.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), new THREE.Vector3(1, 0, 0));
-          // Abstand des Knies zur Linie (seitlich): grün, solange das Knie auf der Linie bleibt
-          const t0 = (j["k" + s].y - b.y) / ((a.y - b.y) || 1), zl = b.z + (a.z - b.z) * t0, ok = Math.abs(j["k" + s].z - zl) < 3;
-          dot.material.color.set(ok ? C.ok : C.warn);
-          if (it.lab) { it.pos.copy(j["k" + s]).add(new THREE.Vector3(0, 6, 8)); setLab(it.lab, ok, "Knie über Fußspitze"); }
-        };
-      } else if (d.k === "angle") {
-        const A = newArc(C.ok); it.objs.push(A.fill, A.edge); it.lab = label();
-        it.upd = j => {
-          const p = j[d.at], deg = arc(A, p, tmp.subVectors(j[d.a], p).clone(), tmp2.subVectors(j[d.b], p).clone(), 17);
-          const ok = deg >= d.ok - 0.5;
-          for (const m of [A.fill, A.edge]) m.material.color.set(ok ? C.ok : C.warn);
-          it.pos.copy(p).add(new THREE.Vector3(14, 8, 6));
-          setLab(it.lab, ok, `${d.name} ${Math.round(deg)}°`);
-        };
-      } else if (d.k === "heel") {
-        const discs = [1, 2].map(() => { const m = mk(new THREE.CircleGeometry(6, 28), mat(C.ok, 0.55)); m.rotation.x = -Math.PI / 2; return m; });
-        it.objs.push(...discs); it.lab = label();
-        it.upd = j => {
-          let ok = true;
-          discs.forEach((m, i) => { const an = j["an" + (i + 1)]; m.position.set(an.x - 1, 0.4, an.z); ok = ok && an.y < 9; m.material.color.set(ok ? C.ok : C.warn); });
-          it.pos.copy(j.an1).add(new THREE.Vector3(-6, 10, 6));
-          setLab(it.lab, ok, "Fersen am Boden");
-        };
-      }
-      items.push(it);
-    }
-  });
-
-  let show = -2; // -2 = aus, -1 = alle, sonst Nummer des Hinweises
-  const P = new THREE.Vector3();
-  return {
-    set(v) { show = v; for (const it of items) { const on = show === -1 || show === it.hi; for (const o of it.objs) o.visible = on; if (it.lab) it.lab.hidden = !on; } },
-    update(j) { if (show === -2) return; for (const it of items) if (show === -1 || show === it.hi) it.upd(j); },
-    place(camera, w, h) {
-      if (show === -2) return;
-      for (const it of items) {
-        if (!it.lab || it.lab.hidden) continue;
-        P.copy(it.pos).project(camera);
-        it.lab.el.style.transform = `translate(${((P.x + 1) / 2 * w).toFixed(1)}px,${((1 - P.y) / 2 * h).toFixed(1)}px) translate(-50%,-50%)`;
-      }
-    },
-    dispose() { tube.dispose(); for (const m of mats) m.dispose(); },
-  };
-}
+const v2 = (p, z = 0) => new THREE.Vector3(p[0] - 100, 124 - p[1], z);
+const DEG = 180 / Math.PI;
 
 // Pose aus uebungen.js zu 3D-Gelenkpunkten
-function joints(ex, t) {
+export function joints(ex, t) {
   const cfg = X3[ex.id] || {};
-  let P = lerp(ex.A, ex.B, t);
+  let P = lerp({ ...ex.A, ...(cfg.A || {}) }, { ...ex.B, ...(cfg.B || {}) }, t);
   if (cfg.sym) {
     P = { ...P };
     for (const k of ["a", "f", "t", "s", "ft"]) {
@@ -156,13 +36,161 @@ function joints(ex, t) {
     const s = i === 1 ? 1 : -1;
     j["sh" + i] = v(o.sh, s * SW);
     j["hp" + i] = v(o.hip, s * HW);
-    j["el" + i] = v(o["el" + i], s * (cfg.ez ?? SW));
-    j["h" + i] = v(o["h" + i], s * (cfg.hz ?? SW));
+    j["el" + i] = v(o["el" + i], s * (cfg.ez ?? SW + 0.5));
+    j["h" + i] = v(o["h" + i], s * (cfg.hz ?? SW + 1.5));
     j["k" + i] = v(o["k" + i], s * HW);
     j["an" + i] = v(o["an" + i], s * FW);
     j["to" + i] = v(o["to" + i], s * (FW + 1.5));
   }
+  j.hm = j.h1.clone().add(j.h2).multiplyScalar(0.5);
   return j;
+}
+
+// ---------- Technik-Hinweise: Werte berechnen ----------
+const active = (d, t) => d.when === "A" ? t < 0.15 : d.when === "B" ? t > 0.85 : true;
+const inRange = (d, deg) => (d.min == null || deg >= d.min - 0.5) && (d.max == null || deg <= d.max + 0.5);
+function calc(d, j, t) {
+  const on = active(d, t);
+  switch (d.k) {
+    case "dir": { const deg = REF[d.ref].angleTo(tmp.subVectors(j[d.b], j[d.a])) * DEG; return { deg, st: on ? +inRange(d, deg) : -1, text: `${d.name} ${Math.round(deg)}°` }; }
+    case "angle": { const deg = tmp.subVectors(j[d.a], j[d.at]).angleTo(tmp2.subVectors(j[d.b], j[d.at])) * DEG; return { deg, st: on ? +inRange(d, deg) : -1, text: `${d.name} ${Math.round(deg)}°` }; }
+    case "straight": { const deg = tmp.subVectors(j[d.a], j[d.at]).angleTo(tmp2.subVectors(j[d.b], j[d.at])) * DEG; return { deg, st: on ? +(deg >= d.min - 0.5) : -1, text: d.label }; }
+    case "plumb": { const off = Math.abs(j[d.p].x - j[d.ref].x); return { deg: off, st: on ? +(off <= d.tol) : -1, text: d.label }; }
+    case "track": { const s = d.side, a = j["hp" + s], b = j["to" + s], k = j["k" + s]; const t0 = (k.y - b.y) / ((a.y - b.y) || 1), zl = b.z + (a.z - b.z) * t0, off = Math.abs(k.z - zl); return { deg: off, st: on ? +(off < 3) : -1, text: "Knie über Fußspitze" }; }
+    case "heel": { const y = Math.max(...(d.sides || [1, 2]).map(i => j["an" + i].y)); return { deg: y, st: on ? +(y < 9) : -1, text: d.label || "Fersen am Boden" }; }
+    case "spine": return { st: 1, text: d.label || "Rücken gerade" };
+    case "mark": return { st: 2, text: d.label };
+  }
+  return { st: -1, text: "" };
+}
+// Für Tests: welche Hinweise werden im Bewegungsablauf gelb?
+export function checkHints(ex) {
+  const out = [];
+  (H3[ex.id] || []).forEach(h => h.draw.forEach(d => {
+    let lo = Infinity, hi = -Infinity, warn = 0;
+    for (let t = 0; t <= 1.0001; t += 0.02) { const r = calc(d, joints(ex, t), t); if (r.deg != null && r.st !== -1) { lo = Math.min(lo, r.deg); hi = Math.max(hi, r.deg); } if (r.st === 0) warn++; }
+    out.push({ hint: h.t, k: d.k, lo: Math.round(lo), hi: Math.round(hi), warn });
+  }));
+  return out;
+}
+
+function makeHints(scene, defs, C, wrap) {
+  const tube = new THREE.CylinderGeometry(1, 1, 1, 12), ball = new THREE.SphereGeometry(1, 16, 12);
+  const mats = [];
+  const mat = (c, op = 0.95) => { const m = new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: op, depthTest: false, depthWrite: false }); mats.push(m); return m; };
+  const mk = (geo, m) => { const x = new THREE.Mesh(geo, m); x.renderOrder = 10; x.visible = false; scene.add(x); return x; };
+  const items = [];
+  const label = () => { const el = document.createElement("div"); el.className = "v3lab"; el.hidden = true; wrap.appendChild(el); return { el, k: "" }; };
+  const ICO = { 1: ["ok", "✓"], 0: ["warn", "!"], [-1]: ["neu", "·"], 2: ["neu", "i"] };
+  const setLab = (L, st, text) => { const k = st + text; if (L.k !== k) { L.k = k; L.el.innerHTML = `<i class="${ICO[st][0]}">${ICO[st][1]}</i>`; L.el.append(text); } };
+  const col = st => st === 1 ? C.ok : st === 0 ? C.warn : C.guide;
+  const paint = (objs, st) => { for (const o of objs) o.material.color.set(col(st)); };
+
+  function arc(o, p, u, v, r) {
+    const ang = u.angleTo(v);
+    if (Math.abs(ang - (o.ang ?? -1)) > 0.004) {
+      o.fill.geometry.dispose(); o.edge.geometry.dispose();
+      o.fill.geometry = new THREE.CircleGeometry(r, 32, 0, ang);
+      o.edge.geometry = new THREE.RingGeometry(r - 0.9, r + 0.6, 32, 1, 0, ang);
+      o.ang = ang;
+    }
+    const x = u.clone().normalize(), y = v.clone().addScaledVector(x, -v.dot(x));
+    if (y.lengthSq() < 1e-6) y.set(0, 0, 1).cross(x);
+    y.normalize();
+    const z = new THREE.Vector3().crossVectors(x, y);
+    const q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, y, z));
+    for (const m of [o.fill, o.edge]) { m.position.copy(p); m.quaternion.copy(q); }
+  }
+  const newArc = () => ({ fill: mk(new THREE.BufferGeometry(), mat(C.ok, 0.28)), edge: mk(new THREE.BufferGeometry(), mat(C.ok)) });
+
+  defs.forEach((h, hi) => {
+    for (const d of h.draw) {
+      const it = { hi, objs: [], lab: label(), pos: new THREE.Vector3() };
+      let draw;
+      if (d.k === "spine") {
+        const t = mk(tube, mat(C.ok)); it.objs.push(t);
+        draw = j => {
+          const dir = tmp.subVectors(j.sh, j.hip).normalize(), off = new THREE.Vector3(-dir.y, dir.x, 0).multiplyScalar(11);
+          const a = j.hip.clone().add(off).addScaledVector(dir, -4), b = j.hd.clone().add(off);
+          seg(t, a, b, 0.9); it.pos.lerpVectors(a, b, 0.7).addScaledVector(off, 1.3);
+        };
+      } else if (d.k === "dir") {
+        const ref = mk(tube, mat(C.guide, 0.8)), A = newArc(); it.objs.push(ref, A.fill, A.edge); it.paint = [A.fill, A.edge];
+        draw = j => {
+          const p = j[d.a], r = REF[d.ref];
+          seg(ref, p, p.clone().addScaledVector(r, 30), 0.5);
+          arc(A, p, r.clone(), new THREE.Vector3().subVectors(j[d.b], p), 19);
+          it.pos.copy(p).addScaledVector(r, 18).add(new THREE.Vector3(20, 0, 10));
+        };
+      } else if (d.k === "angle") {
+        const A = newArc(); it.objs.push(A.fill, A.edge); it.paint = [A.fill, A.edge];
+        draw = j => {
+          const p = j[d.at];
+          arc(A, p, new THREE.Vector3().subVectors(j[d.a], p), new THREE.Vector3().subVectors(j[d.b], p), 16);
+          it.pos.copy(p).add(new THREE.Vector3(15, 9, 6));
+        };
+      } else if (d.k === "straight") {
+        const t = mk(tube, mat(C.guide, 0.8)), dot = mk(ball, mat(C.ok)); dot.scale.setScalar(3); it.objs.push(t, dot); it.paint = [dot];
+        draw = j => {
+          const a = j[d.a].clone().add(new THREE.Vector3(0, 0, 22)), b = j[d.b].clone(); b.z = 22;
+          seg(t, a, b, 0.6); dot.position.copy(j[d.at]).setZ(22);
+          it.pos.copy(j[d.at]).add(new THREE.Vector3(0, 14, 22));
+        };
+      } else if (d.k === "plumb") {
+        const t = mk(tube, mat(C.guide, 0.8)), dot = mk(ball, mat(C.ok)); dot.scale.setScalar(3); it.objs.push(t, dot); it.paint = [dot];
+        draw = j => {
+          const p = j[d.p], r = j[d.ref], z = p.z + 3, top = Math.max(p.y, r.y) + 22;
+          seg(t, new THREE.Vector3(r.x, 0, z), new THREE.Vector3(r.x, top, z), 0.55);
+          dot.position.copy(p).setZ(z);
+          it.pos.copy(p).add(new THREE.Vector3(12, 8, 6));
+        };
+      } else if (d.k === "track") {
+        const t = mk(tube, mat(C.guide, 0.85)), dot = mk(new THREE.TorusGeometry(4.2, 0.7, 8, 24), mat(C.ok));
+        it.objs.push(t, dot); it.paint = [dot];
+        if (d.side !== 1 && h.draw.some(x => x.k === "track" && x.side === 1)) { it.lab.el.remove(); it.lab = null; }
+        draw = j => {
+          const s = d.side;
+          seg(t, j["hp" + s], j["to" + s], 0.6);
+          dot.position.copy(j["k" + s]); dot.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), new THREE.Vector3(1, 0, 0));
+          it.pos.copy(j["k" + s]).add(new THREE.Vector3(0, 6, 8));
+        };
+      } else if (d.k === "heel") {
+        const sides = d.sides || [1, 2];
+        const discs = sides.map(() => { const m = mk(new THREE.CircleGeometry(6, 28), mat(C.ok, 0.55)); m.rotation.x = -Math.PI / 2; return m; });
+        it.objs.push(...discs); it.paint = discs;
+        draw = j => {
+          discs.forEach((m, i) => { const an = j["an" + sides[i]]; m.position.set(an.x - 1, 0.4, an.z); });
+          it.pos.copy(j["an" + sides[0]]).add(new THREE.Vector3(-6, 10, 6));
+        };
+      } else if (d.k === "mark") {
+        const dot = mk(new THREE.SphereGeometry(1, 16, 12), mat(C.guide, 0.5)); dot.scale.setScalar(4.5); it.objs.push(dot);
+        draw = j => { dot.position.copy(j[d.p]); it.pos.copy(j[d.p]).add(new THREE.Vector3(10, 10, 8)); };
+      } else continue;
+      it.upd = (j, t) => {
+        draw(j);
+        const r = calc(d, j, t);
+        if (it.paint) paint(it.paint, r.st);
+        if (it.lab) setLab(it.lab, r.st, r.text);
+      };
+      items.push(it);
+    }
+  });
+
+  let show = -2; // -2 = aus, sonst Nummer des Hinweises
+  const P = new THREE.Vector3();
+  return {
+    set(v) { show = v; for (const it of items) { const on = show === it.hi; for (const o of it.objs) o.visible = on; if (it.lab) it.lab.el.hidden = !on; } },
+    update(j, t) { if (show === -2) return; for (const it of items) if (show === it.hi) it.upd(j, t); },
+    place(camera, w, h) {
+      if (show === -2) return;
+      for (const it of items) {
+        if (!it.lab || it.lab.el.hidden) continue;
+        P.copy(it.pos).project(camera);
+        it.lab.el.style.transform = `translate(${((P.x + 1) / 2 * w).toFixed(1)}px,${((1 - P.y) / 2 * h).toFixed(1)}px) translate(-50%,-50%)`;
+      }
+    },
+    dispose() { tube.dispose(); ball.dispose(); for (const m of mats) m.dispose(); },
+  };
 }
 
 function colors() {
@@ -172,19 +200,22 @@ function colors() {
   const cs = getComputedStyle(probe), out = { bg: cs.backgroundColor, ink: cs.color, line: cs.borderTopColor };
   probe.remove();
   const dark = new THREE.Color(out.bg).getHSL({}).l < 0.3;
-  return { ...out, dark, body: dark ? "#cfcfd6" : "#3b3b42", joint: dark ? "#e9e9ee" : "#26262b", acc: "#ff5a1f", ok: dark ? "#3ccf7c" : "#1f9d55", warn: dark ? "#ffc53d" : "#e0a100", guide: dark ? "#6cb4ff" : "#2f7cf6", prop: dark ? "#3a3a41" : "#d3d3da", floor: dark ? "#232327" : "#e8e8ec" };
+  return { ...out, dark, body: dark ? "#cfcfd6" : "#3b3b42", joint: dark ? "#e9e9ee" : "#26262b", acc: "#ff5a1f",
+    ok: dark ? "#3ccf7c" : "#1f9d55", warn: dark ? "#ffc53d" : "#e0a100", guide: dark ? "#6cb4ff" : "#2f7cf6",
+    prop: dark ? "#3a3a41" : "#d3d3da", wall: dark ? "#2c2c31" : "#e2e2e7", metal: dark ? "#9a9aa3" : "#7d7d86", pad: dark ? "#55555d" : "#2f2f35",
+    floor: dark ? "#232327" : "#e8e8ec" };
 }
 
 function buildScene(ex, C) {
+  const cfg = X3[ex.id] || {};
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(C.bg);
-  const hemi = new THREE.HemisphereLight(0xffffff, C.dark ? 0x202024 : 0xb8b8c0, C.dark ? 1.1 : 1.5);
-  scene.add(hemi);
+  scene.add(new THREE.HemisphereLight(0xffffff, C.dark ? 0x202024 : 0xb8b8c0, C.dark ? 1.1 : 1.5));
   const sun = new THREE.DirectionalLight(0xffffff, C.dark ? 2.2 : 2.4);
   sun.position.set(60, 160, 90);
   sun.castShadow = true;
   sun.shadow.mapSize.set(1024, 1024);
-  Object.assign(sun.shadow.camera, { left: -120, right: 120, top: 120, bottom: -120, near: 10, far: 400 });
+  Object.assign(sun.shadow.camera, { left: -130, right: 130, top: 190, bottom: -130, near: 10, far: 450 });
   sun.shadow.radius = 4;
   scene.add(sun);
   const fill = new THREE.DirectionalLight(0xffffff, 0.6);
@@ -192,19 +223,20 @@ function buildScene(ex, C) {
   scene.add(fill);
 
   // Boden: runde Fläche plus weicher Schatten
-  const floor = new THREE.Mesh(new THREE.CircleGeometry(110, 64), new THREE.MeshStandardMaterial({ color: C.floor, roughness: 1 }));
+  const floor = new THREE.Mesh(new THREE.CircleGeometry(115, 64), new THREE.MeshStandardMaterial({ color: C.floor, roughness: 1 }));
   floor.rotation.x = -Math.PI / 2;
   floor.receiveShadow = true;
   scene.add(floor);
 
-  const mBody = new THREE.MeshStandardMaterial({ color: C.body, roughness: 0.5, metalness: 0.05 });
-  const mJoint = new THREE.MeshStandardMaterial({ color: C.joint, roughness: 0.45, metalness: 0.05 });
-  const mAcc = new THREE.MeshStandardMaterial({ color: C.acc, roughness: 0.4, metalness: 0.1 });
-  const mProp = new THREE.MeshStandardMaterial({ color: C.prop, roughness: 0.8 });
+  const std = (c, r = 0.5, m = 0.05) => new THREE.MeshStandardMaterial({ color: c, roughness: r, metalness: m });
+  const mBody = std(C.body), mJoint = std(C.joint, 0.45), mAcc = std(C.acc, 0.4, 0.1), mProp = std(C.prop, 0.8),
+    mWall = Object.assign(std(C.wall, 0.95), { transparent: true, opacity: 0.9 }), mMetal = std(C.metal, 0.35, 0.6), mPad = std(C.pad, 0.7);
 
-  const cyl = new THREE.CylinderGeometry(1, 1, 1, 20, 1, true);
+  const cyl = new THREE.CylinderGeometry(1, 1, 1, 20, 1, true), rod = new THREE.CylinderGeometry(1, 1, 1, 14);
   const sph = new THREE.SphereGeometry(1, 24, 16);
-  const add = (geo, mat, cast = true) => { const m = new THREE.Mesh(geo, mat); m.castShadow = cast; m.receiveShadow = true; scene.add(m); return m; };
+  const add = (geo, mat, cast = true, parent = scene) => { const m = new THREE.Mesh(geo, mat); m.castShadow = cast; m.receiveShadow = true; parent.add(m); return m; };
+  const boxAt = (w, h, d, x, y, z, mat, cast = true) => { const m = add(new THREE.BoxGeometry(w, h, d), mat, cast); m.position.set(x, y, z); return m; };
+  const rodFix = (a, b, r, mat) => { const m = add(rod, mat); seg(m, a, b, r); return m; };
 
   // Körperteile: [von, nach, Dicke]
   const LIMBS = [];
@@ -218,46 +250,86 @@ function buildScene(ex, C) {
   const torso = add(new THREE.CylinderGeometry(1, 0.8, 1, 28), mBody);
   const chest = add(sph, mBody), pelvis = add(sph, mBody), neck = add(cyl, mBody), head = add(sph, mBody);
 
-  // Geräte
-  const props = [];
+  // Geräte. Feste Teile werden einmal gebaut, bewegte (Hanteln, Kabel …) folgen den Händen.
+  const props = [], walls = [];
+  const hz = cfg.hz ?? SW + 1.5;
+  const handPt = (k, j) => (k === "h1" || k === "h2") && cfg.sym ? j.hm : j[k];
+  let cableN = 0;
   for (const pr of ex.props || []) {
     if (pr.t === "box") {
-      const h = 124 - pr.y;
-      const m = add(new THREE.BoxGeometry(pr.w, h, 40), mProp);
-      m.position.set(pr.x + pr.w / 2 - 100, h / 2, 0);
+      const h = 124 - pr.y, wall = pr.w <= 8 && h > 100;
+      const m = boxAt(pr.w, h, wall ? 120 : 40, pr.x + pr.w / 2 - 100, h / 2, 0, wall ? mWall.clone() : mProp, !wall);
+      if (wall) { m.renderOrder = 5; walls.push(m); } // Wand wird durchsichtig, wenn sie zwischen Kamera und Figur steht
     } else if (pr.t === "bench") {
-      const m = add(new THREE.BoxGeometry(pr.w, 6, 26), mProp);
-      m.position.set(pr.x + pr.w / 2 - 100, 124 - pr.y - 3, 0);
-      for (const dx of [6, pr.w - 6]) {
-        const leg = add(new THREE.BoxGeometry(4, 124 - pr.y - 6, 18), mProp);
-        leg.position.set(pr.x + dx - 100, (124 - pr.y - 6) / 2, 0);
-      }
+      const top = 124 - pr.y, z = cfg.benchZ || 0;
+      boxAt(pr.w, 6, 26, pr.x + pr.w / 2 - 100, top - 3, z, mPad);
+      for (const dx of [6, pr.w - 6]) boxAt(4, top - 6, 18, pr.x + dx - 100, (top - 6) / 2, z, mMetal);
     } else if (pr.t === "mat") {
-      const m = add(new THREE.BoxGeometry(pr.w ?? 140, 1.6, 50), mProp, false);
-      m.position.set((pr.x ?? 30) + (pr.w ?? 140) / 2 - 100, 0.8, 0);
+      boxAt(pr.w ?? 140, 1.6, 54, (pr.x ?? 30) + (pr.w ?? 140) / 2 - 100, 0.8, 0, mProp, false);
+    } else if (pr.t === "bar") {
+      const y = 124 - pr.y, x1 = pr.x1 - 100, x2 = pr.x2 - 100;
+      if (pr.posts) { // Barren / Parallettes: zwei Holme nach vorn
+        for (const s of [1, -1]) {
+          const z = s * hz;
+          rodFix(new THREE.Vector3(x1, y, z), new THREE.Vector3(x2, y, z), 1.8, mMetal);
+          for (const x of [x1 + 4, x2 - 4]) rodFix(new THREE.Vector3(x, 0, z), new THREE.Vector3(x, y, z), 1.4, mMetal);
+        }
+      } else { // Klimmzugstange quer, mit Pfosten
+        const x = (x1 + x2) / 2, L = Math.max(hz + 16, 42);
+        rodFix(new THREE.Vector3(x, y, -L), new THREE.Vector3(x, y, L), 1.6, mMetal);
+        for (const z of [-L, L]) rodFix(new THREE.Vector3(x, 0, z), new THREE.Vector3(x, y + 4, z), 2, mMetal);
+      }
     } else if (pr.t === "kb") {
       const g = new THREE.Group();
-      const bell = new THREE.Mesh(new THREE.SphereGeometry(6.5, 24, 16), mAcc);
-      bell.position.y = -8; bell.castShadow = true;
-      const handle = new THREE.Mesh(new THREE.TorusGeometry(4.2, 1.1, 10, 24, Math.PI), mAcc);
-      handle.castShadow = true;
-      handle.position.y = -3.5;
-      g.add(bell, handle);
+      const bell = add(new THREE.SphereGeometry(6.5, 24, 16), mAcc, true, g); bell.position.y = -8;
+      const handle = add(new THREE.TorusGeometry(4.2, 1.1, 10, 24, Math.PI), mAcc, true, g); handle.position.y = -3.5;
       scene.add(g);
-      props.push({ g, upd: j => g.position.copy(tmp.copy(j.h1).add(j.h2).multiplyScalar(0.5)) });
+      props.push(j => g.position.copy(j.hm));
     } else if (pr.t === "db") {
       for (const k of pr.at || ["h1"]) {
         const g = new THREE.Group();
-        const bar = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.1, 14, 12), mJoint);
-        for (const dz of [-6, 6]) {
-          const w = new THREE.Mesh(new THREE.CylinderGeometry(4.2, 4.2, 3.2, 20), mAcc);
-          w.position.y = dz; w.castShadow = true; g.add(w);
-        }
-        g.add(bar);
+        add(new THREE.CylinderGeometry(1.1, 1.1, 14, 12), mMetal, true, g);
+        for (const dz of [-6, 6]) { const w = add(new THREE.CylinderGeometry(4.2, 4.2, 3.2, 20), mAcc, true, g); w.position.y = dz; }
         g.rotation.x = Math.PI / 2;
         scene.add(g);
-        props.push({ g, upd: j => g.position.copy(j[k]) });
+        props.push(j => g.position.copy(j[k]));
       }
+    } else if (pr.t === "plate") {
+      const g = new THREE.Group();
+      if ((pr.r || 10) <= 6) { // Polster einer Maschine
+        const pad = add(new THREE.CylinderGeometry(4.5, 4.5, 2 * FW + 14, 20), mPad, true, g); pad.rotation.x = Math.PI / 2;
+      } else { // Langhantel quer mit Scheiben
+        const L = 62, pz = Math.max(hz + 18, 40);
+        const bar = add(new THREE.CylinderGeometry(1.3, 1.3, 2 * L, 14), mMetal, true, g); bar.rotation.x = Math.PI / 2;
+        for (const s of [1, -1]) {
+          const p = add(new THREE.CylinderGeometry(pr.r, pr.r, 5, 32), mAcc, true, g); p.rotation.x = Math.PI / 2; p.position.z = s * pz;
+          const c = add(new THREE.CylinderGeometry(2.6, 2.6, 3, 16), mMetal, true, g); c.rotation.x = Math.PI / 2; c.position.z = s * (pz - 4.5);
+        }
+      }
+      scene.add(g);
+      props.push(j => { const p = handPt(pr.at, j); g.position.set(p.x, p.y - (pr.dy || 0), 0); });
+    } else if (pr.t === "cable") {
+      const from = cfg.cfrom?.[cableN] ? new THREE.Vector3(...cfg.cfrom[cableN]) : v2(pr.from);
+      cableN++;
+      const each = cfg.grip === "each" && typeof pr.to === "string" && pr.to[0] === "h";
+      const ends = each ? [[1, "h1"], [-1, "h2"]] : [[0, pr.to]];
+      for (const [s, to] of ends) {
+        const f = from.clone(); if (each) f.z = s * hz;
+        const pul = add(sph, mPad); pul.scale.setScalar(2.4); pul.position.copy(f);
+        const line = add(rod, mMetal);
+        props.push(j => { const b = typeof to === "string" ? (cfg.grip === "mid" && to[0] === "h" ? j.hm : j[to]) : v2(to); seg(line, f, b, 0.45); });
+      }
+    } else if (pr.t === "handle") {
+      if (cfg.grip === "each") {
+        for (const k of ["h1", "h2"]) { const r = add(new THREE.TorusGeometry(3.6, 0.9, 10, 24), mPad); props.push(j => r.position.copy(j[k])); }
+      } else {
+        const L = Math.max(2 * hz + 14, 16), m = add(new THREE.CylinderGeometry(1.2, 1.2, L, 12), mMetal); m.rotation.x = Math.PI / 2;
+        props.push(j => m.position.copy(j.hm));
+      }
+    } else if (pr.t === "band") {
+      const m = add(rod, mAcc);
+      const pt = (k, j) => typeof k === "string" ? j[k] : v2(k);
+      props.push(j => seg(m, pt(pr.a, j), pt(pr.b, j), 1.1));
     }
   }
 
@@ -268,15 +340,48 @@ function buildScene(ex, C) {
     const top = tmp2.copy(j.sh), bot = j.hip;
     seg(torso, bot, top, 1);
     const len = torso.scale.y;
-    torso.scale.set(8.2, len, 14);
-    chest.position.copy(top); chest.quaternion.copy(torso.quaternion); chest.scale.set(8.2, 6, 15.5);
+    torso.scale.set(8.2, len, 14.5);
+    chest.position.copy(top); chest.quaternion.copy(torso.quaternion); chest.scale.set(8.2, 6, 16);
     pelvis.position.copy(bot); pelvis.quaternion.copy(torso.quaternion); pelvis.scale.set(8.2, 6.5, 11.5);
     tmp.subVectors(j.hd, j.sh).normalize();
     seg(neck, j.sh, tmp2.copy(j.sh).addScaledVector(tmp, 9), 3.4);
     head.position.copy(j.hd); head.quaternion.copy(torso.quaternion); head.scale.set(8.4, 9.6, 8);
-    for (const p of props) p.upd(j);
+    for (const p of props) p(j);
   }
-  return { scene, pose, sun };
+  // Wände zwischen Kamera und Figur fast unsichtbar machen
+  const seeThrough = (cam, fx) => { for (const w of walls) { const between = (cam.x - w.position.x) * (fx - w.position.x) < 0; w.material.opacity = between ? 0.12 : 0.9; w.material.depthWrite = !between; } };
+  return { scene, pose, seeThrough };
+}
+
+// Bildausschnitt: Mitte und Größe aus Anfangs- und Endpose
+function framing(ex) {
+  const bb = new THREE.Box3();
+  for (const t of [0, 0.5, 1]) for (const p of Object.values(joints(ex, t))) bb.expandByPoint(p);
+  for (const pr of ex.props || []) if ((pr.t === "box" && !(pr.w <= 8 && 124 - pr.y > 100)) || pr.t === "bench") { bb.expandByPoint(new THREE.Vector3(pr.x - 100, 0, 0)); bb.expandByPoint(new THREE.Vector3(pr.x + pr.w - 100, 0, 0)); }
+  bb.expandByPoint(new THREE.Vector3(bb.min.x, 0, 0));
+  const target = bb.getCenter(new THREE.Vector3());
+  const size = bb.getSize(new THREE.Vector3());
+  return { target, span: Math.max(size.x, size.z, 60), base: Math.max(size.x, size.y, 135) * 0.5 / Math.tan((34 / 2) * Math.PI / 180) * 1.45 };
+}
+
+// Standbild einer Übung (für Tests und später für die kleinen Vorschaubilder)
+export function snap(ex, t = 1, azDeg = 42, elDeg = 14, w = 240, h = 220) {
+  const C = colors();
+  const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+  r.setPixelRatio(1); r.setSize(w, h, false);
+  r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap;
+  const { scene, pose, seeThrough } = buildScene(ex, C);
+  pose(joints(ex, t));
+  const { target, base } = framing(ex);
+  const cam = new THREE.PerspectiveCamera(34, w / h, 1, 2000), az = azDeg * Math.PI / 180, el = elDeg * Math.PI / 180;
+  cam.position.set(target.x + base * Math.cos(el) * Math.sin(az), target.y + base * Math.sin(el), target.z + base * Math.cos(el) * Math.cos(az));
+  cam.lookAt(target);
+  seeThrough(cam.position, target.x);
+  r.render(scene, cam);
+  const url = r.domElement.toDataURL("image/png");
+  scene.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
+  r.dispose(); r.forceContextLoss();
+  return url;
 }
 
 let cur = null;
@@ -322,20 +427,13 @@ export function open3d(ex, opts = {}) {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   wrap.prepend(renderer.domElement);
 
-  const { scene, pose } = buildScene(ex, C);
+  const { scene, pose, seeThrough } = buildScene(ex, C);
   const hints = defs ? makeHints(scene, defs, C, wrap) : null;
   const camera = new THREE.PerspectiveCamera(34, 1, 1, 2000);
 
-  // Bildausschnitt: Mitte und Größe aus Anfangs- und Endpose
-  const bb = new THREE.Box3();
-  for (const t of [0, 0.5, 1]) for (const p of Object.values(joints(ex, t))) bb.expandByPoint(p);
-  for (const pr of ex.props || []) if (pr.t === "box" || pr.t === "bench") { bb.expandByPoint(new THREE.Vector3(pr.x - 100, 0, 0)); bb.expandByPoint(new THREE.Vector3(pr.x + pr.w - 100, 0, 0)); }
-  bb.expandByPoint(new THREE.Vector3(bb.min.x, 0, 0));
-  const target = bb.getCenter(new THREE.Vector3());
-  const size = bb.getSize(new THREE.Vector3());
-  const base = Math.max(size.x, size.y, 60) * 0.5 / Math.tan((34 / 2) * Math.PI / 180) * 1.45;
+  const { target, base, span } = framing(ex);
 
-  const VIEWS = { front: [90, 6], diag: [42, 14], side: [0, 4], top: [30, 72] };
+  const VIEWS = { front: [90, 6], diag: [42, 14], side: [0, 4], top: [30, 72], back: [-90, 10] };
   const rad = Math.PI / 180;
   let az = 42 * rad, el = 14 * rad, dist = base;
   let azT = az, elT = el, distT = dist;
@@ -350,7 +448,7 @@ export function open3d(ex, opts = {}) {
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     // Hochformat: weiter weg, damit die ganze Figur reinpasst
-    camera.userData.fit = w < h ? Math.max(1, (h / w) * 0.72) : 1;
+    camera.userData.fit = Math.max(1, span * 0.5 * 1.2 / (Math.tan(17 * Math.PI / 180) * (w / h)) / base);
     camera.updateProjectionMatrix();
     dirty = true;
   }
@@ -371,10 +469,11 @@ export function open3d(ex, opts = {}) {
     if (dirty) {
       const jj = joints(ex, ease(ph));
       pose(jj);
-      if (hints) hints.update(jj);
+      if (hints) hints.update(jj, ease(ph));
       const r = dist * (camera.userData.fit || 1);
       camera.position.set(target.x + r * Math.cos(el) * Math.sin(az), target.y + r * Math.sin(el), target.z + r * Math.cos(el) * Math.cos(az));
       camera.lookAt(target);
+      seeThrough(camera.position, target.x);
       renderer.render(scene, camera);
       if (hints) hints.place(camera, wrap.clientWidth, wrap.clientHeight);
       dirty = false;

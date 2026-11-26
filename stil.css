@@ -58,7 +58,7 @@ html.v3open,html.v3open body{overflow:hidden}
 .v3chips{margin:12px 0 0;gap:6px;flex-wrap:wrap;overflow:visible}.v3chips .chip{padding:7px 10px;font-size:13.5px}.v3txt{margin:8px 0 0;font-size:15px;line-height:1.4;min-height:2.8em}
 .v3lab{position:absolute;left:0;top:0;pointer-events:none;background:var(--bg);color:var(--ink);font-size:13px;font-weight:700;border-radius:999px;padding:4px 10px 4px 5px;white-space:nowrap;display:flex;gap:6px;align-items:center;box-shadow:0 1px 4px rgba(0,0,0,.18)}
 .v3lab i{font-style:normal;width:18px;height:18px;border-radius:50%;display:grid;place-items:center;font-size:11px;color:#fff;background:var(--ok)}
-.v3lab i.warn{background:light-dark(#e0a100,#ffc53d);color:#111}
+.v3lab i.warn{background:light-dark(#e0a100,#ffc53d);color:#111}.v3lab i.neu{background:light-dark(#2f7cf6,#6cb4ff);color:#fff}
 .steps{margin:16px 0 0;padding-left:22px}.steps li{margin:6px 0}
 .target{display:flex;gap:18px;margin:14px 0 4px;flex-wrap:wrap}
 .target b{display:block;font-size:24px;font-weight:800;letter-spacing:-.02em}.target span{font-size:13px;color:var(--mute)}
