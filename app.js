@@ -20,7 +20,7 @@ const ICON={play:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v1
 let profiles=[],activeId=null,mode=null,planId=null,draft={},pain=null,allLogs=[],runs=[],custom=[];
 let libF="all",sheetMode="train",libId=null,picker=false,pickCat=null,editing=false,delArm=false,newTpl="kraft",rstArm=false;
 let order={},work=null,saveSrc=null,sMode=null,gen=null,swaps={},training=false,back=null,swapPerm=false;
-let set={sound:true,loud:false,awake:true,bar:20,plates:[25,20,15,10,5,2.5,1.25],backup:0,undo:false};
+let set={sound:true,loud:false,awake:true,fig3d:true,bar:20,plates:[25,20,15,10,5,2.5,1.25],backup:0,undo:false};
 const filled=x=>!!(x.r||x.w||x.ok);
 function load(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch(e){return d}}
 function store(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true}catch(e){msg("Speichern hat nicht geklappt: Der Speicher ist voll oder gesperrt. Mach in den Einstellungen eine Sicherung.");return false}}
@@ -85,7 +85,7 @@ function renderList(full=true){
   const o=ord(p);
   $("#list").innerHTML=(ordChanged(p)?`<div class="ordnote"><span>Reihenfolge nur für heute geändert</span><button class="link" id="ordreset">Zurücksetzen</button><button class="link" id="ordsave">Als neuen Plan speichern</button></div>`:"")
    +o.map(i=>{const r=rowAt(p,i),e=EX[r.id];if(!e)return "";const s=sets(p,i),d=s.filter(x=>x.ok).length;
-    return `<div class="item"><button class="row" data-open="${i}"><div class="thumb">${svg(e,1)}</div><div><div class="t">${esc(e.name)}${e.knee?'<span class="knee" title="Stabilität & Reha"></span>':""}</div><div class="d">${r.sets} × ${esc(r.reps)}${trow(e)}${r.orig?` · <span class="swapped">${r.today?"nur heute":"getauscht"}</span>`:""}</div></div><span class="prog ${d>=s.length&&d?"done":""}">${d}/${s.length}</span></button><button class="grip" data-grip aria-label="${esc(e.name)} verschieben (gedrückt halten und ziehen)">${ICON.grip}</button></div>`}).join("");
+    return `<div class="item"><button class="row" data-open="${i}"><div class="thumb" data-t3="${e.id}">${svg(e,1)}</div><div><div class="t">${esc(e.name)}${e.knee?'<span class="knee" title="Stabilität & Reha"></span>':""}</div><div class="d">${r.sets} × ${esc(r.reps)}${trow(e)}${r.orig?` · <span class="swapped">${r.today?"nur heute":"getauscht"}</span>`:""}</div></div><span class="prog ${d>=s.length&&d?"done":""}">${d}/${s.length}</span></button><button class="grip" data-grip aria-label="${esc(e.name)} verschieben (gedrückt halten und ziehen)">${ICON.grip}</button></div>`}).join("");
   if(!full)return;
   const lbl=prof().pain||"Schmerz";
   $("#finish").innerHTML=p.ex.length?`<h3>Beschwerden ${esc(lbl)}?</h3><div class="sub">0 = keine, 10 = sehr stark</div>
@@ -97,7 +97,7 @@ function renderEdit(){
   if(!work)startEdit();const p=work;
   $("#list").innerHTML=`<div class="grid2e"><label>Name des Plans<input id="ptitle" value="${esc(p.title)}"></label><label>Dauer (Min.)<input id="pmin" inputmode="numeric" value="${p.min}"></label></div>`
    +`<div class="sub" style="margin-bottom:4px">Zum Umsortieren den Griff rechts gedrückt halten und ziehen.</div>`
-   +p.ex.map((r,i)=>{const e=EX[r.id];if(!e)return "";return `<div class="item"><div class="erow"><div class="thumb s">${svg(e,1)}</div><div><div class="t">${esc(e.name)}</div>
+   +p.ex.map((r,i)=>{const e=EX[r.id];if(!e)return "";return `<div class="item"><div class="erow"><div class="thumb s" data-t3="${e.id}">${svg(e,1)}</div><div><div class="t">${esc(e.name)}</div>
     <div class="ctl"><label class="mini">Sätze<input data-es="${i}" inputmode="numeric" value="${r.sets}"></label><label class="mini">Wdh./Zeit<input class="reps" data-er="${i}" value="${esc(r.reps)}"></label>
     <button class="sm" data-rm="${i}" aria-label="${esc(e.name)} entfernen">✕</button></div></div></div><button class="grip" data-grip aria-label="${esc(e.name)} verschieben">${ICON.grip}</button></div>`}).join("")
    +`<button class="cta sec" id="addex">+ Übung hinzufügen</button>
@@ -105,7 +105,7 @@ function renderEdit(){
     <div class="row2">${prof().modes[mode].plans.length>1?`<button class="link danger" id="delplan">${delArm?"Wirklich löschen? Nochmal tippen":"Plan löschen"}</button>`:""}<button class="link ${rstArm?"danger":""}" id="resettpl">${rstArm?"Ersetzt ALLE Pläne dieses Profils. Nochmal tippen":"Startpläne neu laden"}</button></div>`;
 }
 /* ---------- library ---------- */
-function libRow(e,attr){return `<button class="row" ${attr}><div class="thumb">${svg(e,1)}</div><div><div class="t">${esc(e.name)}${e.knee?'<span class="knee"></span>':""}</div><div class="d">${CATS.find(c=>c[0]===e.cat)[1]}</div></div><span class="eqtag">${e.eq?"Gerät":"ohne Gerät"}</span></button>`}
+function libRow(e,attr){return `<button class="row" ${attr}><div class="thumb" data-t3="${e.id}">${svg(e,1)}</div><div><div class="t">${esc(e.name)}${e.knee?'<span class="knee"></span>':""}</div><div class="d">${CATS.find(c=>c[0]===e.cat)[1]}</div></div><span class="eqtag">${e.eq?"Gerät":"ohne Gerät"}</span></button>`}
 function renderLib(){
   $("#libf").innerHTML=[["all","Alle"],["eq","Mit Gerät"],["bw","Ohne Gerät"]].map(([k,t])=>`<button class="chip" data-libf="${k}" aria-pressed="${k===libF}">${t}</button>`).join("");
   $("#lib").innerHTML=CATS.map(([c,t])=>{const xs=exList().filter(e=>e.cat===c&&(libF==="all"||(libF==="eq")===e.eq));
@@ -192,11 +192,23 @@ const redrawSets=()=>{if($("#sheet").hidden||sheetMode!=="train"||picker||open<0
 /* 3D-Ansicht: fig3d.js wird erst beim Antippen geladen */
 const D3=new Set(["bench","benchbb","latpull","row","shpress","facepull","curl","pushdown","hipthrust","goblet","rdl","stepup","legcurl","calf","pallof","farmer","hollow","pullup","dips","pushup","invrow","bwsquat","stepdown","deadhang","tuck","slbridge","deadbug","legswing","revlunge","askip","buttkick","plank","pikepush","dbrow","deadlift","bulgarian","ohp","frontraise","birddog","balance","glutebridge","onearmrow","dorsiflex","wallsit","walltoeraise","slcalf","tibraise","sideplank","sideraise","hipabd","bandwalk","legswingside","itbstretch","latraise","cablefly","revfly","hipdrop","hiprot","anklerot","wallsitband"]);
 const gl3=(()=>{let ok;return()=>{if(ok===undefined){try{const c=document.createElement("canvas");ok=!!(c.getContext("webgl2")||c.getContext("webgl"))}catch(e){ok=false}}return ok}})();
-const b3d=e=>e&&e.A&&!e.custom&&D3.has(e.id)&&gl3()?`<button class="b3d" data-3d="${e.id}" aria-label="${esc(e.name)} in 3D ansehen"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9"/></svg>3D</span></button>`:"";
-function open3D(id){const e=EX[id];if(!e)return;cancelAnimationFrame(raf);
+const use3d=e=>!!(e&&e.A&&!e.custom&&D3.has(e.id)&&gl3());
+const b3d=e=>use3d(e)?`<button class="b3d" data-3d="${e.id}" aria-label="${esc(e.name)} in 3D ansehen"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9"/></svg>3D</span></button>`:"";
+function open3D(id){const e=EX[id];if(!e)return;cancelAnimationFrame(raf);stop3d();
   import("./fig3d.js").then(m=>m.open3d(e,{onClose:()=>{if(!$("#sheet").hidden&&$("#stage"))animate(e)}})).catch(()=>{toast("3D-Ansicht geht auf diesem Gerät nicht");animate(e)})}
+let m3d=null;const load3d=()=>m3d||(m3d=import("./fig3d.js").catch(e=>{m3d=null;throw e}));
+const stop3d=()=>{if(m3d)m3d.then(m=>m.stopStage()).catch(()=>{})};
+/* kleine Listenbilder: werden in 3D nachgezeichnet, sobald sie sichtbar sind */
+const t3q=[];let t3busy=false;
+const t3io="IntersectionObserver" in window?new IntersectionObserver(es=>{for(const x of es)if(x.isIntersecting){t3io.unobserve(x.target);t3q.push(x.target)}t3run()},{rootMargin:"200px"}):null;
+function t3run(){if(t3busy||!t3q.length)return;t3busy=true;load3d().then(m=>{const step=()=>{const el=t3q.shift();if(!el){t3busy=false;return}
+  if(el.isConnected&&el.dataset.t3&&!el.dataset.t3done){try{el.innerHTML=`<img alt="" src="${m.thumb(EX[el.dataset.t3])}">`;el.dataset.t3done="1"}catch(e){}}
+  setTimeout(step,0)};step()}).catch(()=>{t3busy=false;t3q.length=0})}
+function t3scan(root){if(!t3io||set.fig3d===false)return;for(const el of root.querySelectorAll("[data-t3]:not([data-t3done])"))if(use3d(EX[el.dataset.t3]))t3io.observe(el)}
+new MutationObserver(ms=>{for(const mu of ms)for(const n of mu.addedNodes)if(n.nodeType===1){if(n.matches?.("[data-t3]"))t3scan(n.parentNode);else t3scan(n)}}).observe(document.body,{childList:true,subtree:true});
 function animate(e){
-  cancelAnimationFrame(raf);const st=$("#stage");if(!st||!e.A)return;
+  cancelAnimationFrame(raf);stop3d();const st=$("#stage");if(!st||!e.A)return;
+  if(set.fig3d!==false&&use3d(e)){load3d().then(m=>{if(st.isConnected)m.mountStage(st,e)}).catch(()=>{});return}
   if(matchMedia("(prefers-reduced-motion: reduce)").matches){st.innerHTML=`<div style="display:grid;grid-template-columns:1fr 1fr;width:100%;height:100%">${svg(e,0)}${svg(e,1)}</div>`+b3d(e);return}
   const T=3200,t0=performance.now();
   const loop=now=>{const p=((now-t0)%T)/T;let x=p<.5?p*2:2-p*2;x=Math.min(1,Math.max(0,(x-.12)/.76));x=x*x*(3-2*x);
@@ -206,8 +218,8 @@ function animate(e){
 function openSheet(i){open=i;sheetMode="train";picker=false;training=true;awake();showSheet();renderSheet()}
 function closeSheet(){
   if(!profiles.length){sheetMode="who";renderWho();return}
-  if(back){const b=back;back=null;cancelAnimationFrame(raf);b();return}
-  training=Object.values(draft).some(s=>s.some(filled));awake();open=-1;libId=null;picker=false;sheetMode="train";gen=null;saveSrc=null;document.body.classList.remove("so");cancelAnimationFrame(raf);$("#sheet").hidden=true;document.body.style.overflow="";renderTop();renderList();renderRemind();
+  if(back){const b=back;back=null;cancelAnimationFrame(raf);stop3d();b();return}
+  training=Object.values(draft).some(s=>s.some(filled));awake();open=-1;libId=null;picker=false;sheetMode="train";gen=null;saveSrc=null;document.body.classList.remove("so");cancelAnimationFrame(raf);stop3d();$("#sheet").hidden=true;document.body.style.overflow="";renderTop();renderList();renderRemind();
   if(!$("#v-log").hidden)renderLogs();if(!$("#v-lib").hidden)renderLib();if(!$("#v-run").hidden)renderRuns()}
 /* ---------- rest timer ---------- */
 let tEnd=0,tInt=0,tHide=0,hold=null,ac=null,wl=null;
@@ -358,7 +370,7 @@ function renderGen(){
     h+=`<div id="gpre" style="margin-top:26px;padding-top:18px;border-top:1px solid var(--line)"><h3>Vorschlag</h3>
     ${g.note?`<div class="msg">${esc(g.note)}</div>`:""}
     ${g.ex.length?`<div class="sub">${g.ex.length} ${g.ex.length===1?"Übung":"Übungen"} · ca. ${planMin(g.ex)} Min. Mit dem Würfel tauschst du einzelne Übungen.</div>
-    ${g.ex.map((r,i)=>{const e=EX[r.id];return `<div class="grow"><div class="thumb s">${svg(e,1)}</div><div><div class="t">${esc(e.name)}</div><div class="d">${r.sets} × ${esc(r.reps)}${e.type==="s"?" Sek.":e.type==="m"?" m":""}</div></div>
+    ${g.ex.map((r,i)=>{const e=EX[r.id];return `<div class="grow"><div class="thumb s" data-t3="${e.id}">${svg(e,1)}</div><div><div class="t">${esc(e.name)}</div><div class="d">${r.sets} × ${esc(r.reps)}${e.type==="s"?" Sek.":e.type==="m"?" m":""}</div></div>
       <div class="ctl"><button class="sm" data-groll="${i}" aria-label="${esc(e.name)} austauschen">${ICON.dice}</button><button class="sm" data-grm="${i}" aria-label="${esc(e.name)} entfernen">✕</button></div></div>`}).join("")}
     <div class="btns"><button class="cta" id="gsave">Plan speichern</button><button class="cta sec" id="gdo2">Alles neu würfeln</button></div>
     ${kiHTML()}`:""}
@@ -399,7 +411,7 @@ document.addEventListener("click",ev=>{
   if(b.dataset.libf){libF=b.dataset.libf;renderLib();return}
   if(b.dataset.lib){libId=b.dataset.lib;sheetMode="lib";open=0;showSheet();renderSheet();return}
   if(b.dataset.perm){swapPerm=b.dataset.perm==="1";renderPicker(false);return}
-  if(b.id==="swapbtn"){cancelAnimationFrame(raf);picker=true;pickCat=null;swapPerm=false;renderSheet();return}
+  if(b.id==="swapbtn"){cancelAnimationFrame(raf);stop3d();picker=true;pickCat=null;swapPerm=false;renderSheet();return}
   if(b.id==="pickclose"){if(sheetMode==="add"){closeSheet();return}picker=false;renderSheet();return}
   if(b.dataset.pcat){pickCat=b.dataset.pcat;renderPicker(sheetMode==="add");return}
   if(b.dataset.pick&&sheetMode==="add"){const e=EX[b.dataset.pick];if(!work)startEdit();work.ex.push({id:e.id,sets:3,reps:e.reps});closeSheet();return}
@@ -551,7 +563,7 @@ function renderLogs(){
   $("#advice").innerHTML=adv?`<div class="msg">${adv}</div>`:"";
   const cnt={};for(const l of Lg)for(const id of Object.keys(l.entries||{}))if(EX[id]&&l.entries[id].some(x=>x.r||x.w))cnt[id]=(cnt[id]||0)+1;
   const ids=Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a]||EX[a].name.localeCompare(EX[b].name));
-  $("#progs").innerHTML=ids.length?ids.map(id=>{const b=bests(id)[0];return `<button class="row" data-prog="${id}"><div class="thumb">${svg(EX[id],1)}</div><div><div class="t">${esc(EX[id].name)}</div><div class="d">${cnt[id]} ${cnt[id]===1?"Einheit":"Einheiten"}</div></div><span class="prog">${b?esc(b[0]):""}</span></button>`}).join(""):'<p class="sub">Nach der ersten Einheit siehst du hier deine Bestwerte.</p>';
+  $("#progs").innerHTML=ids.length?ids.map(id=>{const b=bests(id)[0];return `<button class="row" data-prog="${id}"><div class="thumb" data-t3="${id}">${svg(EX[id],1)}</div><div><div class="t">${esc(EX[id].name)}</div><div class="d">${cnt[id]} ${cnt[id]===1?"Einheit":"Einheiten"}</div></div><span class="prog">${b?esc(b[0]):""}</span></button>`}).join(""):'<p class="sub">Nach der ersten Einheit siehst du hier deine Bestwerte.</p>';
   $("#logs").innerHTML=Lg.length?Lg.map(logRow).join(""):'<p class="sub">Noch keine Einheiten gespeichert.</p>';
 }
 /* eine gespeicherte Einheit ansehen und korrigieren */
@@ -818,6 +830,8 @@ function renderSet(){
   ${tog("sound","Ton beim Timer","Piept, wenn Pause oder Haltezeit vorbei ist. Nur solange die App offen ist.")}
   ${tog("loud","Auch im Lautlos-Modus","Kann laufende Musik anhalten.")}
   ${tog("awake","Bildschirm anlassen","Solange ein Training läuft.")}`:""}
+  <h2 style="margin-top:28px">Darstellung</h2>
+  ${tog("fig3d","3D-Figuren","Übungsbilder räumlich. Aus: flache Figuren, spart etwas Akku.")}
   <p class="note">Trainingskarte ${esc(APPV)}. Die App schickt keine Daten ins Internet.</p></div>`}
 function renderRemind(){const el=$("#remind"),n=[...allLogs,...runs].filter(l=>l.ts>set.backup).length;
   const show=profiles.length>0&&n>=5;el.hidden=!show;if(show)el.innerHTML=`${n} Einträge sind noch nicht gesichert. <button class="link" id="bkup">Jetzt sichern</button>`}
@@ -867,7 +881,7 @@ function xClick(b){const d=b.dataset;
   if(b.id==="ldel"){if(!elogDel){elogDel=true;keepTop(renderLogSheet);return true}allLogs=allLogs.filter(x=>x.id!==elog.id);saveLogs();closeSheet();toast("Einheit gelöscht");return true}
   if(d.prog){progId=d.prog;sheetMode="prog";showSheet();renderProg();return true}
   if(b.id==="progbtn"){const s=$("#sheet").scrollTop;progId=rowAt(plan(),open).id;back=()=>{sheetMode="train";renderSheet();$("#sheet").scrollTop=s};sheetMode="prog";renderProg();return true}
-  if(b.id==="platebtn"){const st=$("#sheet").scrollTop,p=plan(),id=rowAt(p,open).id,s=sets(p,open),i=Math.max(0,s.findIndex(x=>!x.ok));platesW=s[i].w||hint(id,s,i).w||"";back=()=>{sheetMode="train";renderSheet();$("#sheet").scrollTop=st};sheetMode="plates";cancelAnimationFrame(raf);renderPlates();$("#sheet").scrollTop=0;return true}
+  if(b.id==="platebtn"){const st=$("#sheet").scrollTop,p=plan(),id=rowAt(p,open).id,s=sets(p,open),i=Math.max(0,s.findIndex(x=>!x.ok));platesW=s[i].w||hint(id,s,i).w||"";back=()=>{sheetMode="train";renderSheet();$("#sheet").scrollTop=st};sheetMode="plates";cancelAnimationFrame(raf);stop3d();renderPlates();$("#sheet").scrollTop=0;return true}
   if(d.plbar){set.bar=+d.plbar;saveSet();keepTop(renderPlates);return true}
   if(d.plp){const v=+d.plp;set.plates=set.plates.includes(v)?set.plates.filter(x=>x!==v):PLATES.filter(x=>x===v||set.plates.includes(x));saveSet();keepTop(renderPlates);return true}
   if(b.id==="pluse"){const t=num(platesW),l=t&&t<=500?loadPlates(t,set.bar,set.plates):null;if(l){const s=sets(plan(),open),x=s.find(x=>!x.ok)||s[s.length-1];x.w=String(l.total);persist();toast(dec(l.total)+" kg übernommen")}closeSheet();return true}
@@ -880,7 +894,7 @@ function xClick(b){const d=b.dataset;
     const r=clone(erun),old=runs;if(r.id)runs=runs.map(x=>x.id===r.id?r:x);else{r.id=uid("r");r.pid=prof().id;runs=[r,...runs]}if(!saveRuns()){runs=old;$("#rmsg").textContent="Speichern hat nicht geklappt.";return true}closeSheet();toast("Lauf gespeichert");return true}
   if(b.id==="rdel"){if(!erunDel){readRun();erunDel=true;keepTop(renderRunSheet);return true}runs=runs.filter(x=>x.id!==erun.id);saveRuns();closeSheet();toast("Lauf gelöscht");return true}
   if(b.id==="custnew"){ecust={id:null,name:"",type:"kg",rest:60,reps:"10–12",cat:"legs",need:[],how:[],off:false};sheetMode="cust";showSheet();renderCust();return true}
-  if(d.cedit){const c=custom.find(x=>x.id===d.cedit);if(c){ecust=clone(c);sheetMode="cust";cancelAnimationFrame(raf);renderCust();$("#sheet").scrollTop=0}return true}
+  if(d.cedit){const c=custom.find(x=>x.id===d.cedit);if(c){ecust=clone(c);sheetMode="cust";cancelAnimationFrame(raf);stop3d();renderCust();$("#sheet").scrollTop=0}return true}
   if(d.ccat){ecust.cat=d.ccat;keepTop(renderCust);return true}
   if(d.ctype){ecust.type=d.ctype;if(["8–10","10–12","30","20"].includes(ecust.reps))ecust.reps=d.ctype==="s"?"30":d.ctype==="m"?"20":"10–12";keepTop(renderCust);return true}
   if(d.cgear){const i=ecust.need.indexOf(d.cgear);if(i>=0)ecust.need.splice(i,1);else ecust.need.push(d.cgear);keepTop(renderCust);return true}
@@ -901,7 +915,7 @@ function xInput(i){const d=i.dataset;
 document.addEventListener("change",ev=>{const t=ev.target;if(t.id==="bkfile"&&t.files[0])pickFile(t.files[0]);if(t.id==="runfile"&&t.files.length){importRuns(t.files);t.value=""}});
 
 /* ---------- boot ---------- */
-const APPV="1.5";
+const APPV="1.6";
 let updW=null;
 (function boot(){
   const d=load("tk3",null);if(d){activeId=d.activeId||null;mode=d.mode||null;planId=d.planId||null;draft=d.draft||{};order=d.order||{};swaps=d.swaps||{};

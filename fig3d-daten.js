@@ -7,6 +7,7 @@
 //   cfrom Kabel-Startpunkte in 3D [x, y, z] statt aus der Seitenansicht
 //   benchZ/boxZ Bank/Kasten zur Seite schieben · A/B Posen-Korrekturen nur für 3D (Schlüssel siehe fig3d.js, z. B. ab = seitlich abspreizen)
 //   pfix  Geräte aus uebungen.js anpassen {Nummer: {x, y, w}} · anchor andere Verankerung · dbAxis "x" = Hantel längs
+//   thumbT welche Stellung das kleine Listenbild zeigt (0 = Anfang, 1 = Ende, Standard 1)
 //   reach Beine so drehen, dass die Zehen den Boden berühren · K eigene 3D-Posen [Anfang, (Mitte), Ende] · props3 eigene 3D-Geräte
 //
 // H3[id]: Hinweise. t = Name auf dem Knopf, view = beste Ansicht (front, side, back, diag, top), txt = Erklärung
@@ -41,7 +42,7 @@ export const X3 = {
   hollow: { sym: true, hz: 13, ez: 15 },
   pullup: { sym: true, hz: 25, ez: 28, anchor: { pt: "h1", at: [100, -58] }, pfix: { 0: { y: -58 } } },
   dips: { sym: true, hz: 23, ez: 21, B: { a1: -96, a2: -96 } },
-  pushup: { sym: true, hz: 22, ez: 26, reach: { pt: "to" } },
+  pushup: { sym: true, hz: 22, ez: 26, reach: { pt: "to" }, thumbT: 0 },
   invrow: { sym: true, hz: 20, ez: 23, grip: "each" },
   bwsquat: { sym: true, hz: 13, ez: 15 },
   stepdown: { feetY: { 1: 28 } },

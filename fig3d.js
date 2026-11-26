@@ -533,7 +533,83 @@ export function audit(ex) {
   return worst;
 }
 
-// Standbild einer Übung (für Tests und später für die kleinen Vorschaubilder)
+// ---------- Vorschauen in der App ----------
+const ease = p => { let x = p < 0.5 ? p * 2 : 2 - p * 2; x = Math.min(1, Math.max(0, (x - 0.12) / 0.76)); return x * x * (3 - 2 * x); };
+const disposeScene = sc => sc.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
+function placeCam(cam, ex, w, h, view, zoom = 0.92) {
+  const { target, base, span } = framing(ex);
+  const V = { front: [90, 6], diag: [42, 14], back: [-90, 10], fdiag: [65, 12], side: [0, 4] }[view || (X3[ex.id] || {}).view0 || "diag"];
+  const fit = Math.max(1, span * 0.5 * 1.15 / (Math.tan(17 * Math.PI / 180) * (w / h)) / base);
+  const r = base * fit * zoom, az = V[0] * R, el = V[1] * R;
+  cam.aspect = w / h; cam.updateProjectionMatrix();
+  cam.position.set(target.x + r * Math.cos(el) * Math.sin(az), target.y + r * Math.sin(el), target.z + r * Math.cos(el) * Math.cos(az));
+  cam.lookAt(target);
+  return target;
+}
+
+// Große Figur oben in der Übung: ein gemeinsamer Zeichner, läuft mit etwa 30 Bildern pro Sekunde und
+// hört von selbst auf, sobald die Übung geschlossen wird.
+let stageR = null, stageStop = null;
+export function mountStage(el, ex) {
+  if (stageStop) stageStop();
+  if (!stageR) {
+    stageR = new THREE.WebGLRenderer({ antialias: true, powerPreference: "low-power" });
+    stageR.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+    stageR.shadowMap.enabled = true; stageR.shadowMap.type = THREE.PCFSoftShadowMap;
+    stageR.domElement.className = "st3d";
+  }
+  const C = colors(), { scene, pose, seeThrough } = buildScene(ex, C), cam = new THREE.PerspectiveCamera(34, 1, 1, 2000);
+  el.appendChild(stageR.domElement);
+  el.classList.add("has3d");
+  let w = 0, h = 0, target = null, raf = 0, last = 0, t0 = performance.now(), stopped = false;
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const draw = now => {
+    if (stopped) return;
+    if (!el.isConnected || !el.getClientRects().length) return stop(); // Übung geschlossen oder ausgeblendet
+    raf = requestAnimationFrame(draw);
+    if (now - last < 32 && w) return; // etwa 30 Bilder pro Sekunde reichen
+    last = now;
+    const cw = el.clientWidth, ch = el.clientHeight;
+    if (cw !== w || ch !== h) { w = cw; h = ch; if (!w || !h) return; stageR.setSize(w, h, false); target = placeCam(cam, ex, w, h); seeThrough(cam.position, target); }
+    pose(joints(ex, still ? 1 : ease(((now - t0) % 3200) / 3200)));
+    stageR.render(scene, cam);
+    if (still) { cancelAnimationFrame(raf); }
+  };
+  raf = requestAnimationFrame(draw);
+  function stop() {
+    if (stopped) return; stopped = true;
+    cancelAnimationFrame(raf); disposeScene(scene);
+    if (stageR.domElement.parentNode === el) el.removeChild(stageR.domElement);
+    el.classList.remove("has3d");
+    if (stageStop === stop) stageStop = null;
+  }
+  stageStop = stop;
+  return stop;
+}
+export const stopStage = () => { if (stageStop) stageStop(); };
+
+// Kleine Bilder in den Listen: einmal als Standbild gezeichnet und gemerkt
+let thumbR = null;
+const thumbCache = new Map();
+export function thumb(ex, w = 144, h = 132) {
+  const C = colors(), key = ex.id + (C.dark ? ":d" : ":l") + w;
+  if (thumbCache.has(key)) return thumbCache.get(key);
+  if (!thumbR) {
+    thumbR = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, powerPreference: "low-power" });
+    thumbR.setPixelRatio(1); thumbR.shadowMap.enabled = true; thumbR.shadowMap.type = THREE.PCFSoftShadowMap;
+  }
+  thumbR.setSize(w, h, false);
+  const { scene, pose, seeThrough } = buildScene(ex, C), cam = new THREE.PerspectiveCamera(34, 1, 1, 2000);
+  pose(joints(ex, (X3[ex.id] || {}).thumbT ?? 1));
+  seeThrough(cam.position, placeCam(cam, ex, w, h, null, 0.74));
+  thumbR.render(scene, cam);
+  const url = thumbR.domElement.toDataURL("image/jpeg", 0.88);
+  disposeScene(scene);
+  thumbCache.set(key, url);
+  return url;
+}
+
+// Standbild einer Übung (für Tests)
 export function snap(ex, t = 1, azDeg = 42, elDeg = 14, w = 240, h = 220) {
   const C = colors();
   const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
@@ -625,8 +701,6 @@ export function open3d(ex, opts = {}) {
   const ro = new ResizeObserver(resize);
   ro.observe(wrap);
   resize();
-
-  const ease = p => { let x = p < 0.5 ? p * 2 : 2 - p * 2; x = Math.min(1, Math.max(0, (x - 0.12) / 0.76)); return x * x * (3 - 2 * x); };
 
   function frame(now) {
     const dt = Math.min(0.1, (now - last) / 1000); last = now;

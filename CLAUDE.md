@@ -44,7 +44,7 @@ Web-App, die man in Safari über »Zum Home-Bildschirm« installiert. Läuft off
 - Technik-Hinweise (seit 1.3): Knopf »Hinweise« in der 3D-Ansicht, je Hinweis Linien/Winkelbögen/Schilder und passende Ansicht. Daten in `H3` in `fig3d-daten.js` (Bausteine spine, dir, angle, straight, plumb, track, heel, mark; Erklärung oben in der Datei). Grün = im guten Bereich, Gelb = Grenze. Winkel sind allgemeine, vorsichtige Richtwerte. Grenzwerte so gewählt, dass die Vorführ-Figur grün bleibt; gelb nur mit Absicht (Kniewinkel bei Goblet/Box Squat). Prüfen: in der Browser-Konsole `checkHints(EX.id)` aus fig3d.js.
 - Welche Übungen den 3D-Knopf haben, steht in `D3` in `app.js` (muss zu den Schlüsseln von `X3` passen). Stand 1.5: alle 60 eingebauten Übungen; eigene Übungen haben keine Figur.
 - Wände werden durchsichtig, wenn sie zwischen Kamera und Figur stehen. `snap()` in fig3d.js macht ein Standbild (für Tests und spätere Vorschaubilder).
-- Plan: 2) erledigt (1.4), 3) erledigt (1.5), 4) offen: kleine Figuren auf den Karten in 3D (Tempo auf dem iPhone prüfen).
+- Seit 1.6 sind auch die Bilder in der App 3D: die große Figur oben in der Übung läuft live (`mountStage`, ein gemeinsamer Zeichner, ca. 30 Bilder/s, stoppt beim Schließen über `stop3d()` in app.js), die kleinen Listenbilder sind Standbilder (`thumb`, ca. 11 ms je Bild am Mac, im Speicher gemerkt, werden erst beim Sichtbarwerden gezeichnet). Schalter »3D-Figuren« in den Einstellungen (`set.fig3d`) schaltet zurück auf die flachen Figuren.
 
 ## Bekannte Grenzen
 - Bei gesperrtem Handy klingelt der Timer nicht zuverlässig.
