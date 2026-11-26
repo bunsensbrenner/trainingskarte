@@ -5,7 +5,9 @@
 //   hz/ez halbe Breite zwischen den Händen / Ellbogen (Standard: hängende Arme neben dem Körper)
 //   grip  "mid" = Kabel/Griff zur Mitte zwischen den Händen, "each" = je Hand ein Gurt (Ringe)
 //   cfrom Kabel-Startpunkte in 3D [x, y, z] statt aus der Seitenansicht
-//   benchZ Bank zur Seite schieben · A/B Posen-Korrekturen nur für 3D
+//   benchZ/boxZ Bank/Kasten zur Seite schieben · A/B Posen-Korrekturen nur für 3D (Schlüssel siehe fig3d.js, z. B. ab = seitlich abspreizen)
+//   pfix  Geräte aus uebungen.js anpassen {Nummer: {x, y, w}} · anchor andere Verankerung · dbAxis "x" = Hantel längs
+//   reach Beine so drehen, dass die Zehen den Boden berühren · K eigene 3D-Posen [Anfang, (Mitte), Ende] · props3 eigene 3D-Geräte
 //
 // H3[id]: Hinweise. t = Name auf dem Knopf, view = beste Ansicht (front, side, back, diag, top), txt = Erklärung
 //   Zeichnungen (draw):
@@ -20,52 +22,52 @@
 //   when     "A" oder "B": nur in der Anfangs- bzw. Endstellung bewerten
 
 export const X3 = {
-  bench: { sym: true, hz: 16, ez: 21, B: { f1: 168, f2: 168 } },
-  benchbb: { sym: true, hz: 23, ez: 25, B: { f1: 168, f2: 168 } },
+  bench: { sym: true, hz: 25, ez: 27, A: { t1: 72, t2: 72, a1: 40, a2: 40, f1: 176, f2: 176 }, B: { f1: 168, f2: 168, t1: 72, t2: 72 }, pfix: { 0: { w: 72 } } },
+  benchbb: { sym: true, hz: 23, ez: 25, A: { t1: 72, t2: 72, a1: 55, a2: 55, f1: 178, f2: 178 }, B: { f1: 168, f2: 168, t1: 72, t2: 72 }, pfix: { 0: { w: 72 } } },
   latpull: { sym: true, hz: 27, ez: 29, grip: "mid" },
   row: { sym: true, hz: 5, ez: 14, grip: "mid" },
-  shpress: { sym: true, hz: 21, ez: 23 },
+  shpress: { sym: true, A: { a1: 0, a2: 0, ab1: 62, ab2: 62, f1: 180, f2: 180, fab1: 0, fab2: 0 }, B: { a1: 0, a2: 0, ab1: 166, ab2: 166, f1: 180, f2: 180, fab1: 0, fab2: 0 } },
   facepull: { sym: true, hz: 8, ez: 25, grip: "mid" },
-  curl: { sym: true, hz: 19, ez: 17 },
+  curl: { sym: true, hz: 25, ez: 19 },
   pushdown: { sym: true, hz: 7, ez: 15, grip: "mid" },
-  hipthrust: { sym: true, hz: 22, ez: 22 },
+  hipthrust: { sym: true, hz: 22, ez: 22, pfix: { 0: { y: 92 } }, reach: { pt: "an" } },
   goblet: { sym: true, hz: 4.5, ez: 11 },
-  rdl: { sym: true, hz: 12, ez: 16 },
-  stepup: {},
+  rdl: { sym: true, hz: 12, ez: 15, A: { a1: 14, f1: 14, a2: 14, f2: 14 } },
+  stepup: { feetY: { 1: 28 } },
   legcurl: { sym: true, hz: 20, ez: 19 },
-  calf: { sym: true },
+  calf: { sym: true, pfix: { 0: { x: 108, w: 30 } } },
   pallof: { sym: true, hz: 3.5, ez: 11, grip: "mid", cfrom: [[8, 98, 90]] },
-  farmer: { hz: 20 },
+  farmer: { hz: 22, dbAxis: "x" },
   hollow: { sym: true, hz: 13, ez: 15 },
-  pullup: { sym: true, hz: 25, ez: 28 },
+  pullup: { sym: true, hz: 25, ez: 28, anchor: { pt: "h1", at: [100, -58] }, pfix: { 0: { y: -58 } } },
   dips: { sym: true, hz: 23, ez: 21, B: { a1: -96, a2: -96 } },
-  pushup: { sym: true, hz: 22, ez: 26 },
+  pushup: { sym: true, hz: 22, ez: 26, reach: { pt: "to" } },
   invrow: { sym: true, hz: 20, ez: 23, grip: "each" },
   bwsquat: { sym: true, hz: 13, ez: 15 },
-  stepdown: {},
-  deadhang: { sym: true, hz: 25, ez: 25 },
-  tuck: { sym: true, hz: 21, ez: 21 },
-  slbridge: { hz: 20 },
-  deadbug: { hz: 17 },
+  stepdown: { feetY: { 1: 28 } },
+  deadhang: { sym: true, hz: 25, ez: 25, anchor: { pt: "h1", at: [100, -58] }, pfix: { 0: { y: -58 } } },
+  tuck: { sym: true, hz: 21, ez: 21, anchor: { pt: "h1", at: [100, 96] }, pfix: { 0: { y: 96 } } },
+  slbridge: { hz: 20, B: { nka: -105 } },
+  deadbug: { hz: 17, B: { a1: 260, f1: 260 } },
   legswing: {},
-  revlunge: {},
+  revlunge: { B: { t2: -20, s2: -80, ft2: 60 } },
   askip: {},
   buttkick: {},
-  plank: { sym: true, hz: 9, ez: 15 },
-  pikepush: { sym: true, hz: 21, ez: 23 },
+  plank: { sym: true, hz: 9, ez: 15, reach: { pt: "to" } },
+  pikepush: { sym: true, hz: 21, ez: 23, reach: { pt: "to", max: 20 }, A: { ft1: 80, ft2: 80 }, B: { ft1: 80, ft2: 80 } },
   dbrow: { sym: true, hz: 17, ez: 16 },
   deadlift: { sym: true, hz: 21, ez: 20 },
-  bulgarian: { hz: 19 },
+  bulgarian: { hz: 21, dbAxis: "x", A: { ft2: -80 }, B: { ft2: -80 }, pfix: { 0: { x: 20, y: 92, w: 39 } }, pin: { 2: { at: [-40, 37.5], knee: "down" } } },
   ohp: { sym: true, hz: 22, ez: 22 },
-  frontraise: { hz: 15 },
+  frontraise: { hz: 13, A: { a1: 14, f1: 14, a2: 14, f2: 14 }, B: { a2: 14, f2: 14 } },
   birddog: {},
   balance: { A: { t1: 6, s1: -6 }, B: { t1: 6, s1: -6 } },
-  glutebridge: { sym: true, hz: 20 },
+  glutebridge: { sym: true, hz: 20, B: { nka: -105 } },
   onearmrow: { benchZ: -13 },
   dorsiflex: {},
   wallsit: { sym: true },
   walltoeraise: { sym: true },
-  slcalf: {},
+  slcalf: { pfix: { 0: { x: 108, w: 30 } } },
   tibraise: { sym: true },
 };
 
@@ -144,13 +146,13 @@ export const H3 = {
   ],
   rdl: [
     { t: "Rücken", view: "side", txt: "Der Rücken bleibt gerade, die Hüfte schiebt nach hinten.", draw: [{ k: "spine", label: "Rücken gerade" }] },
-    kneeAngle(150, "Knie leicht gebeugt, aber nicht weiter einknicken. Die Bewegung kommt aus der Hüfte."),
+    kneeAngle(140, "Knie leicht gebeugt, aber nicht weiter einknicken. Die Bewegung kommt aus der Hüfte."),
     mark("Hanteln", "side", "Hanteln nah an den Beinen entlang führen.", "h1", "Nah an den Beinen"),
   ],
   deadlift: [
     { t: "Rücken", view: "side", txt: "Rücken neutral, nicht rund. Aus den Beinen drücken.", draw: [{ k: "spine", label: "Rücken neutral" }] },
     { t: "Stangenweg", view: "side", txt: "Die Stange bleibt nah am Körper und läuft senkrecht über der Fußmitte.",
-      draw: [{ k: "plumb", p: "h1", ref: "an1", tol: 16, label: "Über der Fußmitte" }] },
+      draw: [{ k: "plumb", p: "h1", ref: "an1", dx: 5, tol: 14, label: "Über der Fußmitte" }] },
     kneeLine(),
   ],
   stepup: [
@@ -270,7 +272,7 @@ export const H3 = {
   ],
   ohp: [
     { t: "Stangenweg", view: "side", txt: "Stange gerade nach oben drücken, sie bleibt über der Fußmitte.",
-      draw: [{ k: "plumb", p: "h1", ref: "an1", tol: 16, label: "Über der Fußmitte", when: "B" }] },
+      draw: [{ k: "plumb", p: "h1", ref: "an1", dx: 5, tol: 16, label: "Über der Fußmitte", when: "B" }] },
     upright(8, "Bauch und Gesäß fest, kein Hohlkreuz.", "Rumpf"),
   ],
   frontraise: [

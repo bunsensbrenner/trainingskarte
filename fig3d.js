@@ -18,29 +18,119 @@ const seg = (m, a, b, r) => {
 const v2 = (p, z = 0) => new THREE.Vector3(p[0] - 100, 124 - p[1], z);
 const DEG = 180 / Math.PI;
 
-// Pose aus uebungen.js zu 3D-Gelenkpunkten
-export function joints(ex, t) {
-  const cfg = X3[ex.id] || {};
-  let P = lerp({ ...ex.A, ...(cfg.A || {}) }, { ...ex.B, ...(cfg.B || {}) }, t);
-  if (cfg.sym) {
-    P = { ...P };
-    for (const k of ["a", "f", "t", "s", "ft"]) {
-      const a = P[k + "1"], b = P[k + "2"];
-      if (typeof a === "number" && typeof b === "number") P[k + "1"] = P[k + "2"] = (a + b) / 2;
-    }
+// ---------- Skelett in 3D ----------
+// Winkel wie in uebungen.js (0 = nach unten, 90 = nach vorn, 180 = nach oben), dazu für 3D:
+//   ab/fab  Arm/Unterarm seitlich abspreizen (90 = waagerecht zur Seite)
+//   hy/fhy  Arm/Unterarm waagerecht zur Körpermitte drehen (negativ = nach außen)
+//   lb/sb   Ober-/Unterschenkel seitlich abspreizen · ly/sy  Ober-/Unterschenkel waagerecht drehen · fb Fuß zur Seite
+//   tl      Oberkörper seitlich neigen (positiv = zu Seite 1) · pt  Becken seitlich kippen
+//   roll    ganze Figur um die Blickrichtung kippen (−90 = auf Seite 2 liegen) · yaw  ganze Figur drehen
+// Seite 1 = rechts (zur Kamera in der Seitenansicht), Seite 2 = links.
+const SIDE_KEYS = ["a", "f", "ab", "fab", "hy", "fhy", "t", "s", "ft", "lb", "sb", "ly", "sy", "fb"];
+const R = Math.PI / 180;
+function dirv(a, ab, hy, s) {
+  let x = Math.sin(a * R), y = -Math.cos(a * R), z = 0;
+  const al = -s * ab * R; [y, z] = [y * Math.cos(al), y * Math.sin(al)];
+  const be = s * hy * R; [x, z] = [x * Math.cos(be) + z * Math.sin(be), -x * Math.sin(be) + z * Math.cos(be)];
+  return new THREE.Vector3(x, y, z);
+}
+function fill(P) {
+  P = { sp: 180, tl: 0, pt: 0, roll: 0, yaw: 0, ...P };
+  if (P.nka == null) P.nka = P.sp;
+  for (const i of [1, 2]) {
+    for (const k of ["a", "f", "t", "s", "ab", "hy", "lb", "ly"]) P[k + i] ??= 0;
+    P["fab" + i] ??= P["ab" + i]; P["fhy" + i] ??= P["hy" + i];
+    P["sb" + i] ??= P["lb" + i]; P["sy" + i] ??= P["ly" + i];
+    P["ft" + i] ??= P["s" + i] + 90; P["fb" + i] ??= P["sb" + i];
   }
-  const o = place(P, ex.anchor);
-  const v = (p, z) => new THREE.Vector3(p[0] - 100, 124 - p[1] + 1.5, z);
-  const j = { hip: v(o.hip, 0), sh: v(o.sh, 0), hd: v(o.hd, 0) };
+  return P;
+}
+const mix = (A, B, t) => { const r = {}; for (const k in A) r[k] = A[k] == null || B[k] == null ? (t < 0.5 ? A[k] : B[k]) ?? A[k] ?? B[k] : A[k] + (B[k] - A[k]) * t; for (const k in B) if (!(k in r)) r[k] = B[k]; return r; };
+function poseAt(ex, t) {
+  const cfg = X3[ex.id] || {};
+  let P;
+  if (cfg.K) { // eigene 3D-Posen (Anfang, evtl. Mitte, Ende)
+    const K = cfg.K.map(fill);
+    P = K.length === 3 ? (t < 0.5 ? mix(K[0], K[1], t * 2) : mix(K[1], K[2], t * 2 - 1)) : mix(K[0], K[1], t);
+  } else P = mix(fill({ ...ex.A, ...(cfg.A || {}) }), fill({ ...ex.B, ...(cfg.B || {}) }), t);
+  if (cfg.sym) for (const k of SIDE_KEYS) P[k + "1"] = P[k + "2"] = (P[k + "1"] + P[k + "2"]) / 2;
+  return P;
+}
+function build(P, cfg) {
+  const V = (o, d, l) => o.clone().addScaledVector(d, l);
+  const tl = P.tl * R, pt = P.pt * R;
+  const tilt = v => new THREE.Vector3(v.x, v.y * Math.cos(tl), v.y * Math.sin(tl));
+  const spine = tilt(new THREE.Vector3(Math.sin(P.sp * R), -Math.cos(P.sp * R), 0));
+  const neck = P.nka == null ? spine : tilt(new THREE.Vector3(Math.sin(P.nka * R), -Math.cos(P.nka * R), 0));
+  const hip = new THREE.Vector3(), sh = V(hip, spine, L.sp);
+  const j = { hip, sh, hd: V(V(sh, spine, L.nk), neck, L.hd) };
   for (const i of [1, 2]) {
     const s = i === 1 ? 1 : -1;
-    j["sh" + i] = v(o.sh, s * SW);
-    j["hp" + i] = v(o.hip, s * HW);
-    j["el" + i] = v(o["el" + i], s * (cfg.ez ?? SW + 0.5));
-    j["h" + i] = v(o["h" + i], s * (cfg.hz ?? SW + 1.5));
-    j["k" + i] = v(o["k" + i], s * HW);
-    j["an" + i] = v(o["an" + i], s * FW);
-    j["to" + i] = v(o["to" + i], s * (FW + 1.5));
+    j["sh" + i] = sh.clone().add(new THREE.Vector3(0, -s * SW * Math.sin(tl), s * SW * Math.cos(tl)));
+    j["hp" + i] = hip.clone().add(new THREE.Vector3(0, -s * HW * Math.sin(pt), s * HW * Math.cos(pt)));
+    j["el" + i] = V(j["sh" + i], dirv(P["a" + i], P["ab" + i], P["hy" + i], s), L.ua);
+    j["h" + i] = V(j["el" + i], dirv(P["f" + i], P["fab" + i], P["fhy" + i], s), L.fa);
+    j["k" + i] = V(j["hp" + i], dirv(P["t" + i], P["lb" + i], P["ly" + i], s), L.th);
+    j["an" + i] = V(j["k" + i], dirv(P["s" + i], P["sb" + i], P["sy" + i], s), L.sh);
+    j["to" + i] = V(j["an" + i], dirv(P["ft" + i], P["fb" + i], P["sy" + i], s), L.ft);
+    j["an" + i].z += s; j["to" + i].z += s * 2.5; // Füße leicht nach außen
+    if (cfg.ez != null) j["el" + i].z = s * cfg.ez;
+    if (cfg.hz != null) j["h" + i].z = s * cfg.hz;
+  }
+  // ganze Figur kippen/drehen (um die Hüfte)
+  if (P.roll || P.yaw) {
+    const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(P.roll * R, P.yaw * R, 0, "YXZ"));
+    for (const k in j) j[k].applyQuaternion(q);
+  }
+  return j;
+}
+function anchorShift(j, an) {
+  const d = new THREE.Vector3();
+  if (an === "ground" || an.pt === "ground") {
+    const minY = Math.min(...Object.values(j).map(p => p.y));
+    d.set((an.x ?? 100) - 100 - j.hip.x, (an.y != null ? 124 - an.y + 1.5 : 3.5) - minY, 0);
+  } else if (an.at3) d.subVectors(new THREE.Vector3(...an.at3), j[an.pt]);
+  else d.set(an.at[0] - 100 - j[an.pt].x, 124 - an.at[1] + 1.5 - j[an.pt].y, 0);
+  return d;
+}
+export function joints(ex, t) {
+  const cfg = X3[ex.id] || {}, P = poseAt(ex, t);
+  const an = cfg.anchor3 || cfg.anchor || (cfg.K ? "ground" : ex.anchor || { pt: "an1", at: [100, 121] });
+  let j = build(P, cfg), d = anchorShift(j, an);
+  // reach: Beine so drehen, dass Zehen (oder Fersen) genau den Boden berühren (z. B. Liegestütz, Unterarmstütz)
+  if (cfg.reach) {
+    const Q = { ...P }, key = cfg.reach.pt || "to", goal = key === "to" ? 3.4 : 3.9;
+    for (const i of [1, 2]) {
+      let lo = -(cfg.reach.max || 45), hi = cfg.reach.max || 45;
+      const yAt = dt => { const T = { ...Q, ["t" + i]: P["t" + i] + dt, ["s" + i]: P["s" + i] + dt, ["ft" + i]: P["ft" + i] + dt }; return build(T, cfg)[key + i].y + d.y; };
+      const dir = Math.sign(yAt(5) - yAt(-5)) || 1;
+      for (let n = 0; n < 24; n++) { const mid = (lo + hi) / 2; if ((yAt(mid) - goal) * dir > 0) hi = mid; else lo = mid; }
+      const dt = (lo + hi) / 2;
+      Q["t" + i] = P["t" + i] + dt; Q["s" + i] = P["s" + i] + dt; Q["ft" + i] = P["ft" + i] + dt;
+    }
+    j = build(Q, cfg); d = anchorShift(j, an);
+  }
+  for (const k in j) j[k].add(d);
+  // pin: Fußgelenk bleibt an einer festen Stelle (z. B. hinterer Fuß auf der Bank); Knie wird passend berechnet
+  for (const i in cfg.pin || {}) {
+    const pn = cfg.pin[i], H = j["hp" + i], foot = new THREE.Vector3().subVectors(j["to" + i], j["an" + i]);
+    const A = new THREE.Vector3(pn.at[0], pn.at[1], j["an" + i].z);
+    const dx = A.x - H.x, dy = A.y - H.y, dist = Math.min(Math.hypot(dx, dy), L.th + L.sh - 0.01);
+    const base = Math.atan2(dy, dx), off = Math.acos(Math.min(1, (L.th * L.th + dist * dist - L.sh * L.sh) / (2 * L.th * dist)));
+    const cand = [base + off, base - off].map(b => new THREE.Vector3(H.x + Math.cos(b) * L.th, H.y + Math.sin(b) * L.th, (H.z + A.z) / 2));
+    const K = pn.knee === "down" ? (cand[0].y < cand[1].y ? cand[0] : cand[1]) : pn.knee === "up" ? (cand[0].y > cand[1].y ? cand[0] : cand[1]) : (cand[0].x > cand[1].x ? cand[0] : cand[1]);
+    j["k" + i].copy(K); j["an" + i].copy(A); j["to" + i].copy(A).add(foot);
+  }
+  // Füße am Boden flach aufsetzen statt in den Boden zu zeigen
+  for (const i of [1, 2]) {
+    const A = j["an" + i], T = j["to" + i];
+    const fy = (cfg.feetY?.[i] ?? 0) + 3.4;
+    if (T.y < fy && A.y < fy + 12 && !cfg.noFlat) {
+      const h = new THREE.Vector3(T.x - A.x, 0, T.z - A.z);
+      const drop = Math.min(L.ft, Math.max(0, A.y - fy));
+      const fl = Math.sqrt(Math.max(1, L.ft * L.ft - drop * drop));
+      T.copy(A).addScaledVector(h.normalize(), fl); T.y = A.y - drop;
+    }
   }
   j.hm = j.h1.clone().add(j.h2).multiplyScalar(0.5);
   return j;
@@ -55,7 +145,7 @@ function calc(d, j, t) {
     case "dir": { const deg = REF[d.ref].angleTo(tmp.subVectors(j[d.b], j[d.a])) * DEG; return { deg, st: on ? +inRange(d, deg) : -1, text: `${d.name} ${Math.round(deg)}°` }; }
     case "angle": { const deg = tmp.subVectors(j[d.a], j[d.at]).angleTo(tmp2.subVectors(j[d.b], j[d.at])) * DEG; return { deg, st: on ? +inRange(d, deg) : -1, text: `${d.name} ${Math.round(deg)}°` }; }
     case "straight": { const deg = tmp.subVectors(j[d.a], j[d.at]).angleTo(tmp2.subVectors(j[d.b], j[d.at])) * DEG; return { deg, st: on ? +(deg >= d.min - 0.5) : -1, text: d.label }; }
-    case "plumb": { const off = Math.abs(j[d.p].x - j[d.ref].x); return { deg: off, st: on ? +(off <= d.tol) : -1, text: d.label }; }
+    case "plumb": { const off = Math.abs(j[d.p].x - j[d.ref].x - (d.dx || 0)); return { deg: off, st: on ? +(off <= d.tol) : -1, text: d.label }; }
     case "track": { const s = d.side, a = j["hp" + s], b = j["to" + s], k = j["k" + s]; const t0 = (k.y - b.y) / ((a.y - b.y) || 1), zl = b.z + (a.z - b.z) * t0, off = Math.abs(k.z - zl); return { deg: off, st: on ? +(off < 3) : -1, text: "Knie über Fußspitze" }; }
     case "heel": { const y = Math.max(...(d.sides || [1, 2]).map(i => j["an" + i].y)); return { deg: y, st: on ? +(y < 9) : -1, text: d.label || "Fersen am Boden" }; }
     case "spine": return { st: 1, text: d.label || "Rücken gerade" };
@@ -139,8 +229,8 @@ function makeHints(scene, defs, C, wrap) {
       } else if (d.k === "plumb") {
         const t = mk(tube, mat(C.guide, 0.8)), dot = mk(ball, mat(C.ok)); dot.scale.setScalar(3); it.objs.push(t, dot); it.paint = [dot];
         draw = j => {
-          const p = j[d.p], r = j[d.ref], z = p.z + 3, top = Math.max(p.y, r.y) + 22;
-          seg(t, new THREE.Vector3(r.x, 0, z), new THREE.Vector3(r.x, top, z), 0.55);
+          const p = j[d.p], r = j[d.ref], z = p.z + 3, top = Math.max(p.y, r.y) + 22, rx = r.x + (d.dx || 0);
+          seg(t, new THREE.Vector3(rx, 0, z), new THREE.Vector3(rx, top, z), 0.55);
           dot.position.copy(p).setZ(z);
           it.pos.copy(p).add(new THREE.Vector3(12, 8, 6));
         };
@@ -251,18 +341,59 @@ function buildScene(ex, C) {
   const chest = add(sph, mBody), pelvis = add(sph, mBody), neck = add(cyl, mBody), head = add(sph, mBody);
 
   // Geräte. Feste Teile werden einmal gebaut, bewegte (Hanteln, Kabel …) folgen den Händen.
-  const props = [], walls = [];
+  // Zu jedem Gerät merkt sich solids() die Form, damit audit() prüfen kann, ob etwas im Körper steckt.
+  const props = [], walls = [], solids = [];
   const hz = cfg.hz ?? SW + 1.5;
   const handPt = (k, j) => (k === "h1" || k === "h2") && cfg.sym ? j.hm : j[k];
+  const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
+  const P3 = p => Array.isArray(p) ? V3(...p) : p;
+  const staticBox = (w, h, d, x, y, z, mat, cast = true) => {
+    const m = boxAt(w, h, d, x, y, z, mat, cast);
+    const bx = new THREE.Box3(V3(x - w / 2, y - h / 2, z - d / 2), V3(x + w / 2, y + h / 2, z + d / 2));
+    solids.push(() => [{ box: bx }]);
+    return m;
+  };
+  const addWall = (w, h, d, x, z, axis) => {
+    const m = boxAt(w, h, d, x, h / 2, z, mWall.clone(), false);
+    m.renderOrder = 5; m.userData.axis = axis; walls.push(m); // wird durchsichtig, wenn sie zwischen Kamera und Figur steht
+  };
+  const dumbbell = (k, axis) => {
+    const g = new THREE.Group();
+    add(new THREE.CylinderGeometry(1.1, 1.1, 14, 12), mMetal, true, g);
+    for (const dz of [-6, 6]) { const w = add(new THREE.CylinderGeometry(4.2, 4.2, 3.2, 20), mAcc, true, g); w.position.y = dz; }
+    if (axis === "x") g.rotation.z = Math.PI / 2; else g.rotation.x = Math.PI / 2;
+    scene.add(g);
+    const ax = axis === "x" ? V3(1, 0, 0) : V3(0, 0, 1);
+    props.push(j => g.position.copy(j[k]));
+    solids.push(j => [{ seg: [j[k].clone().addScaledVector(ax, -7.6), j[k].clone().addScaledVector(ax, 7.6)], r: 4.2, held: true }]);
+  };
+  const cable = (f, to) => {
+    const pul = add(sph, mPad); pul.scale.setScalar(2.4); pul.position.copy(f);
+    const line = add(rod, mMetal);
+    props.push(j => seg(line, f, typeof to === "string" ? j[to] : P3(to), 0.45));
+  };
+  const band = (a, b) => { const m = add(rod, mAcc); const pt = (k, j) => typeof k === "string" ? j[k] : P3(k); props.push(j => seg(m, pt(a, j), pt(b, j), 1.1)); };
+
   let cableN = 0;
-  for (const pr of ex.props || []) {
+  // Eigene 3D-Geräte (für Übungen mit eigenen 3D-Posen)
+  for (const pr of cfg.props3 || []) {
+    if (pr.t === "box") staticBox(...pr.s, ...pr.c, pr.m === "pad" ? mPad : mProp);
+    else if (pr.t === "mat") boxAt(...pr.s, ...pr.c, mProp, false);
+    else if (pr.t === "wall") addWall(...pr.s, pr.c[0], pr.c[2], pr.axis || "x");
+    else if (pr.t === "rod") rodFix(P3(pr.a), P3(pr.b), pr.r || 1.6, mMetal);
+    else if (pr.t === "db") for (const k of pr.at) dumbbell(k, pr.axis || "z");
+    else if (pr.t === "cable") cable(P3(pr.from), pr.to);
+    else if (pr.t === "band") band(pr.a, pr.b);
+  }
+  for (const pr0 of cfg.props3 ? [] : ex.props || []) {
+    const pr = { ...pr0, ...(cfg.pfix?.[(ex.props || []).indexOf(pr0)] || {}) };
     if (pr.t === "box") {
-      const h = 124 - pr.y, wall = pr.w <= 8 && h > 100;
-      const m = boxAt(pr.w, h, wall ? 120 : 40, pr.x + pr.w / 2 - 100, h / 2, 0, wall ? mWall.clone() : mProp, !wall);
-      if (wall) { m.renderOrder = 5; walls.push(m); } // Wand wird durchsichtig, wenn sie zwischen Kamera und Figur steht
+      const h = 124 - pr.y;
+      if (pr.w <= 8 && h > 100) addWall(pr.w, h, 120, pr.x + pr.w / 2 - 100, 0, "x");
+      else staticBox(pr.w, h, 40, pr.x + pr.w / 2 - 100, h / 2, cfg.boxZ || 0, mProp);
     } else if (pr.t === "bench") {
       const top = 124 - pr.y, z = cfg.benchZ || 0;
-      boxAt(pr.w, 6, 26, pr.x + pr.w / 2 - 100, top - 3, z, mPad);
+      staticBox(pr.w, 6, 26, pr.x + pr.w / 2 - 100, top - 3, z, mPad);
       for (const dx of [6, pr.w - 6]) boxAt(4, top - 6, 18, pr.x + dx - 100, (top - 6) / 2, z, mMetal);
     } else if (pr.t === "mat") {
       boxAt(pr.w ?? 140, 1.6, 54, (pr.x ?? 30) + (pr.w ?? 140) / 2 - 100, 0.8, 0, mProp, false);
@@ -271,13 +402,13 @@ function buildScene(ex, C) {
       if (pr.posts) { // Barren / Parallettes: zwei Holme nach vorn
         for (const s of [1, -1]) {
           const z = s * hz;
-          rodFix(new THREE.Vector3(x1, y, z), new THREE.Vector3(x2, y, z), 1.8, mMetal);
-          for (const x of [x1 + 4, x2 - 4]) rodFix(new THREE.Vector3(x, 0, z), new THREE.Vector3(x, y, z), 1.4, mMetal);
+          rodFix(V3(x1, y, z), V3(x2, y, z), 1.8, mMetal);
+          for (const x of [x1 + 4, x2 - 4]) rodFix(V3(x, 0, z), V3(x, y, z), 1.4, mMetal);
         }
       } else { // Klimmzugstange quer, mit Pfosten
         const x = (x1 + x2) / 2, L = Math.max(hz + 16, 42);
-        rodFix(new THREE.Vector3(x, y, -L), new THREE.Vector3(x, y, L), 1.6, mMetal);
-        for (const z of [-L, L]) rodFix(new THREE.Vector3(x, 0, z), new THREE.Vector3(x, y + 4, z), 2, mMetal);
+        rodFix(V3(x, y, -L), V3(x, y, L), 1.6, mMetal);
+        for (const z of [-L, L]) rodFix(V3(x, 0, z), V3(x, y + 4, z), 2, mMetal);
       }
     } else if (pr.t === "kb") {
       const g = new THREE.Group();
@@ -285,21 +416,15 @@ function buildScene(ex, C) {
       const handle = add(new THREE.TorusGeometry(4.2, 1.1, 10, 24, Math.PI), mAcc, true, g); handle.position.y = -3.5;
       scene.add(g);
       props.push(j => g.position.copy(j.hm));
+      solids.push(j => [{ sph: j.hm.clone().add(V3(0, -8, 0)), r: 6.5, held: true }]);
     } else if (pr.t === "db") {
-      for (const k of pr.at || ["h1"]) {
-        const g = new THREE.Group();
-        add(new THREE.CylinderGeometry(1.1, 1.1, 14, 12), mMetal, true, g);
-        for (const dz of [-6, 6]) { const w = add(new THREE.CylinderGeometry(4.2, 4.2, 3.2, 20), mAcc, true, g); w.position.y = dz; }
-        g.rotation.x = Math.PI / 2;
-        scene.add(g);
-        props.push(j => g.position.copy(j[k]));
-      }
+      for (const k of pr.at || ["h1"]) dumbbell(k, cfg.dbAxis || "z");
     } else if (pr.t === "plate") {
-      const g = new THREE.Group();
-      if ((pr.r || 10) <= 6) { // Polster einer Maschine
-        const pad = add(new THREE.CylinderGeometry(4.5, 4.5, 2 * FW + 14, 20), mPad, true, g); pad.rotation.x = Math.PI / 2;
+      const g = new THREE.Group(), pad = (pr.r || 10) <= 6;
+      const L = 62, pz = Math.max(hz + 18, 40);
+      if (pad) { // Polster einer Maschine
+        const m = add(new THREE.CylinderGeometry(4.5, 4.5, 2 * FW + 14, 20), mPad, true, g); m.rotation.x = Math.PI / 2;
       } else { // Langhantel quer mit Scheiben
-        const L = 62, pz = Math.max(hz + 18, 40);
         const bar = add(new THREE.CylinderGeometry(1.3, 1.3, 2 * L, 14), mMetal, true, g); bar.rotation.x = Math.PI / 2;
         for (const s of [1, -1]) {
           const p = add(new THREE.CylinderGeometry(pr.r, pr.r, 5, 32), mAcc, true, g); p.rotation.x = Math.PI / 2; p.position.z = s * pz;
@@ -307,18 +432,17 @@ function buildScene(ex, C) {
         }
       }
       scene.add(g);
-      props.push(j => { const p = handPt(pr.at, j); g.position.set(p.x, p.y - (pr.dy || 0), 0); });
+      const at = j => { const p = handPt(pr.at, j); return V3(p.x, p.y - (pr.dy || 0), 0); };
+      props.push(j => g.position.copy(at(j)));
+      if (!pad) solids.push(j => { const c = at(j); return [
+        { seg: [c.clone().setZ(-L), c.clone().setZ(L)], r: 1.3, held: pr.at[0] === "h" },
+        { seg: [c.clone().setZ(pz - 2.5), c.clone().setZ(pz + 2.5)], r: pr.r }, { seg: [c.clone().setZ(-pz - 2.5), c.clone().setZ(-pz + 2.5)], r: pr.r }]; });
     } else if (pr.t === "cable") {
-      const from = cfg.cfrom?.[cableN] ? new THREE.Vector3(...cfg.cfrom[cableN]) : v2(pr.from);
+      const from = cfg.cfrom?.[cableN] ? V3(...cfg.cfrom[cableN]) : v2(pr.from);
       cableN++;
       const each = cfg.grip === "each" && typeof pr.to === "string" && pr.to[0] === "h";
-      const ends = each ? [[1, "h1"], [-1, "h2"]] : [[0, pr.to]];
-      for (const [s, to] of ends) {
-        const f = from.clone(); if (each) f.z = s * hz;
-        const pul = add(sph, mPad); pul.scale.setScalar(2.4); pul.position.copy(f);
-        const line = add(rod, mMetal);
-        props.push(j => { const b = typeof to === "string" ? (cfg.grip === "mid" && to[0] === "h" ? j.hm : j[to]) : v2(to); seg(line, f, b, 0.45); });
-      }
+      if (each) for (const [s, k] of [[1, "h1"], [-1, "h2"]]) cable(from.clone().setZ(s * hz), k);
+      else cable(from, typeof pr.to === "string" ? (cfg.grip === "mid" && pr.to[0] === "h" ? "hm" : pr.to) : v2(pr.to));
     } else if (pr.t === "handle") {
       if (cfg.grip === "each") {
         for (const k of ["h1", "h2"]) { const r = add(new THREE.TorusGeometry(3.6, 0.9, 10, 24), mPad); props.push(j => r.position.copy(j[k])); }
@@ -326,31 +450,31 @@ function buildScene(ex, C) {
         const L = Math.max(2 * hz + 14, 16), m = add(new THREE.CylinderGeometry(1.2, 1.2, L, 12), mMetal); m.rotation.x = Math.PI / 2;
         props.push(j => m.position.copy(j.hm));
       }
-    } else if (pr.t === "band") {
-      const m = add(rod, mAcc);
-      const pt = (k, j) => typeof k === "string" ? j[k] : v2(k);
-      props.push(j => seg(m, pt(pr.a, j), pt(pr.b, j), 1.1));
-    }
+    } else if (pr.t === "band") band(pr.a, typeof pr.b === "string" ? pr.b : v2(pr.b));
   }
 
   function pose(j) {
     for (const l of limbs) seg(l.m, j[l.a], j[l.b], l.r);
     for (const b of balls) b.m.position.copy(j[b.k]);
-    // Rumpf: unten schmaler (Becken), oben breiter (Brustkorb); zeigt die Breite immer zur Seite
-    const top = tmp2.copy(j.sh), bot = j.hip;
-    seg(torso, bot, top, 1);
-    const len = torso.scale.y;
-    torso.scale.set(8.2, len, 14.5);
-    chest.position.copy(top); chest.quaternion.copy(torso.quaternion); chest.scale.set(8.2, 6, 16);
-    pelvis.position.copy(bot); pelvis.quaternion.copy(torso.quaternion); pelvis.scale.set(8.2, 6.5, 11.5);
+    // Rumpf: unten schmaler (Becken), oben breiter (Brustkorb). Ausrichtung aus Wirbelsäule und Schulterlinie.
+    const top = j.sh, bot = j.hip;
+    const y = new THREE.Vector3().subVectors(top, bot), len = y.length() || 0.001; y.divideScalar(len);
+    const z = new THREE.Vector3().subVectors(j.sh1, j.sh2); z.addScaledVector(y, -z.dot(y)).normalize();
+    const x = new THREE.Vector3().crossVectors(y, z);
+    const q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, y, z));
+    torso.position.lerpVectors(bot, top, 0.5); torso.quaternion.copy(q); torso.scale.set(8.2, len, 14.5);
+    chest.position.copy(top); chest.quaternion.copy(q); chest.scale.set(8.2, 6, 16);
+    const zp = new THREE.Vector3().subVectors(j.hp1, j.hp2); zp.addScaledVector(y, -zp.dot(y)).normalize();
+    const qp = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(new THREE.Vector3().crossVectors(y, zp), y, zp));
+    pelvis.position.copy(bot); pelvis.quaternion.copy(qp); pelvis.scale.set(8.2, 6.5, 11.5);
     tmp.subVectors(j.hd, j.sh).normalize();
     seg(neck, j.sh, tmp2.copy(j.sh).addScaledVector(tmp, 9), 3.4);
-    head.position.copy(j.hd); head.quaternion.copy(torso.quaternion); head.scale.set(8.4, 9.6, 8);
+    head.position.copy(j.hd); head.quaternion.copy(q); head.scale.set(8.4, 9.6, 8);
     for (const p of props) p(j);
   }
   // Wände zwischen Kamera und Figur fast unsichtbar machen
-  const seeThrough = (cam, fx) => { for (const w of walls) { const between = (cam.x - w.position.x) * (fx - w.position.x) < 0; w.material.opacity = between ? 0.12 : 0.9; w.material.depthWrite = !between; } };
-  return { scene, pose, seeThrough };
+  const seeThrough = (cam, f) => { for (const w of walls) { const a = w.userData.axis; const between = (cam[a] - w.position[a]) * (f[a] - w.position[a]) < 0; w.material.opacity = between ? 0.12 : 0.9; w.material.depthWrite = !between; } };
+  return { scene, pose, seeThrough, solids };
 }
 
 // Bildausschnitt: Mitte und Größe aus Anfangs- und Endpose
@@ -362,6 +486,39 @@ function framing(ex) {
   const target = bb.getCenter(new THREE.Vector3());
   const size = bb.getSize(new THREE.Vector3());
   return { target, span: Math.max(size.x, size.z, 60), base: Math.max(size.x, size.y, 135) * 0.5 / Math.tan((34 / 2) * Math.PI / 180) * 1.45 };
+}
+
+// Prüft über den ganzen Bewegungsablauf: Stecken Geräte im Körper? Ist etwas unter dem Boden?
+export function audit(ex) {
+  const C = { bg: "#fff", ok: "#0f0", warn: "#ff0", guide: "#00f" };
+  const { scene, solids } = buildScene(ex, { ...C, body: "#888", joint: "#888", acc: "#f60", prop: "#ccc", wall: "#ddd", metal: "#999", pad: "#333", floor: "#eee" });
+  scene.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
+  const BODY = [];
+  for (const i of [1, 2]) BODY.push(["sh" + i, "el" + i, 4.3, "arm"], ["el" + i, "h" + i, 3.6, "hand"], ["hp" + i, "k" + i, 6.2, "leg"], ["k" + i, "an" + i, 4.8, "leg"], ["an" + i, "to" + i, 3.4, "leg"], ["hp" + i, "ts" + i, 6.5, "torso"]);
+  const RJ = { hd: 9, sh1: 5.2, sh2: 5.2, el1: 3.9, el2: 3.9, h1: 3.9, h2: 3.9, hp1: 6.4, hp2: 6.4, k1: 5.1, k2: 5.1, an1: 3.9, an2: 3.9, to1: 3.4, to2: 3.4 };
+  const worst = {};
+  const note = (k, d, t) => { if (d > 2 && (!worst[k] || worst[k].d < d)) worst[k] = { d: Math.round(d * 10) / 10, t: Math.round(t * 100) / 100 }; };
+  const ln = new THREE.Line3(), cp = new THREE.Vector3();
+  for (let t = 0; t <= 1.0001; t += 0.05) {
+    const j = joints(ex, t);
+    for (const i of [1, 2]) j["ts" + i] = j.sh.clone().lerp(j["sh" + i], 0.62); // Brustkorb-Rand
+    for (const k in RJ) note("Boden: " + k, RJ[k] - j[k].y, t);
+    const shapes = solids.flatMap(f => f(j));
+    for (const [a, b, r, tag] of BODY) {
+      for (let u = 0; u <= 1.0001; u += 0.1) {
+        const p = j[a].clone().lerp(j[b], u);
+        shapes.forEach((sh, si) => {
+          if (sh.held && tag === "hand") return;
+          let d;
+          if (sh.box) d = r - sh.box.distanceToPoint(p);
+          else if (sh.sph) d = r + sh.r - sh.sph.distanceTo(p);
+          else { ln.set(sh.seg[0], sh.seg[1]); ln.closestPointToPoint(p, true, cp); d = r + sh.r - cp.distanceTo(p); }
+          note(`Gerät ${si} in ${a}-${b}`, d, t);
+        });
+      }
+    }
+  }
+  return worst;
 }
 
 // Standbild einer Übung (für Tests und später für die kleinen Vorschaubilder)
@@ -376,7 +533,7 @@ export function snap(ex, t = 1, azDeg = 42, elDeg = 14, w = 240, h = 220) {
   const cam = new THREE.PerspectiveCamera(34, w / h, 1, 2000), az = azDeg * Math.PI / 180, el = elDeg * Math.PI / 180;
   cam.position.set(target.x + base * Math.cos(el) * Math.sin(az), target.y + base * Math.sin(el), target.z + base * Math.cos(el) * Math.cos(az));
   cam.lookAt(target);
-  seeThrough(cam.position, target.x);
+  seeThrough(cam.position, target);
   r.render(scene, cam);
   const url = r.domElement.toDataURL("image/png");
   scene.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
@@ -473,7 +630,7 @@ export function open3d(ex, opts = {}) {
       const r = dist * (camera.userData.fit || 1);
       camera.position.set(target.x + r * Math.cos(el) * Math.sin(az), target.y + r * Math.sin(el), target.z + r * Math.cos(el) * Math.cos(az));
       camera.lookAt(target);
-      seeThrough(camera.position, target.x);
+      seeThrough(camera.position, target);
       renderer.render(scene, camera);
       if (hints) hints.place(camera, wrap.clientWidth, wrap.clientHeight);
       dirty = false;
