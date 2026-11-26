@@ -11,6 +11,132 @@ const X3 = {
 };
 
 const UP = new THREE.Vector3(0, 1, 0), tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3();
+const seg = (m, a, b, r) => {
+  const d = new THREE.Vector3().subVectors(b, a), len = d.length() || 0.001;
+  m.position.copy(a).addScaledVector(d, 0.5);
+  m.quaternion.setFromUnitVectors(UP, d.divideScalar(len));
+  m.scale.set(r, len, r);
+};
+
+// Technik-Hinweise je Übung. Jeder Hinweis: kurzer Name (t), Erklärung (txt), beste Ansicht (view), Zeichnungen (draw).
+// Zeichnungen: spine = Linie am Rücken · lean = Vorneigung gegen die Senkrechte (max) · track = Linie Hüfte–Fußspitze
+// angle = Gelenkwinkel (at, a, b; ok = Mindestwinkel) · heel = Fersen am Boden
+const H3 = {
+  goblet: [
+    { t: "Rücken", view: "side", txt: "Rücken gerade, Brust aufrecht. Der Oberkörper neigt sich höchstens etwa 45° nach vorn.",
+      draw: [{ k: "spine" }, { k: "lean", max: 45 }] },
+    { t: "Knie-Linie", view: "front", txt: "Die Knie zeigen über die Fußspitzen und knicken nicht nach innen.",
+      draw: [{ k: "track", side: 1 }, { k: "track", side: 2 }] },
+    { t: "Kniewinkel", view: "side", txt: "Nur so tief, wie es schmerzfrei geht. Grün heißt: Knie nicht enger als 90°. Gelb: nur, wenn das Knie gut mitmacht.",
+      draw: [{ k: "angle", at: "k1", a: "hp1", b: "an1", ok: 90, name: "Knie" }] },
+    { t: "Fersen", view: "side", txt: "Die Fersen bleiben die ganze Zeit fest am Boden.",
+      draw: [{ k: "heel" }] },
+  ],
+};
+export const hasHints = id => !!H3[id];
+
+function makeHints(scene, defs, C, wrap) {
+  const tube = new THREE.CylinderGeometry(1, 1, 1, 12);
+  const mats = [];
+  const mat = (c, op = 0.95) => { const m = new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: op, depthTest: false, depthWrite: false }); mats.push(m); return m; };
+  const mk = (geo, m) => { const x = new THREE.Mesh(geo, m); x.renderOrder = 10; x.visible = false; scene.add(x); return x; };
+  const items = [];
+  const label = () => { const el = document.createElement("div"); el.className = "v3lab"; wrap.appendChild(el); const L = { el, k: "" }; Object.defineProperty(L, "hidden", { get: () => el.hidden, set: v => { el.hidden = v; } }); el.hidden = true; return L; };
+  const setLab = (L, ok, text) => { const k = (ok ? "1" : "0") + text; if (L.k !== k) { L.k = k; L.el.innerHTML = `<i class="${ok ? "ok" : "warn"}">${ok ? "✓" : "!"}</i>`; L.el.append(text); } };
+
+  // Winkelbogen zwischen zwei Richtungen u und v an Punkt p
+  function arc(o, p, u, v, r) {
+    const ang = u.angleTo(v);
+    if (Math.abs(ang - (o.ang ?? -1)) > 0.004) {
+      o.fill.geometry.dispose(); o.edge.geometry.dispose();
+      o.fill.geometry = new THREE.CircleGeometry(r, 32, 0, ang);
+      o.edge.geometry = new THREE.RingGeometry(r - 0.9, r + 0.6, 32, 1, 0, ang);
+      o.ang = ang;
+    }
+    const x = u.clone().normalize(), y = v.clone().addScaledVector(x, -v.dot(x));
+    if (y.lengthSq() < 1e-6) y.set(0, 0, 1).cross(x);
+    y.normalize();
+    const z = new THREE.Vector3().crossVectors(x, y);
+    const q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, y, z));
+    for (const m of [o.fill, o.edge]) { m.position.copy(p); m.quaternion.copy(q); }
+    return ang * 180 / Math.PI;
+  }
+  const newArc = c => ({ fill: mk(new THREE.BufferGeometry(), mat(c, 0.28)), edge: mk(new THREE.BufferGeometry(), mat(c)) });
+
+  defs.forEach((h, hi) => {
+    for (const d of h.draw) {
+      const it = { hi, objs: [], lab: null, pos: new THREE.Vector3() };
+      if (d.k === "spine") {
+        const t = mk(tube, mat(C.ok)); it.objs.push(t); it.lab = label();
+        it.upd = j => {
+          const dir = tmp.subVectors(j.sh, j.hip).normalize(), off = new THREE.Vector3(-dir.y, dir.x, 0).multiplyScalar(11);
+          const a = j.hip.clone().add(off).addScaledVector(dir, -4), b = j.hd.clone().add(off);
+          seg(t, a, b, 0.9); it.pos.lerpVectors(a, b, 0.7).addScaledVector(off, 1.3);
+          setLab(it.lab, true, "Rücken gerade");
+        };
+      } else if (d.k === "lean") {
+        const ref = mk(tube, mat(C.guide, 0.8)), A = newArc(C.ok); it.objs.push(ref, A.fill, A.edge); it.lab = label();
+        it.upd = j => {
+          const top = j.hip.clone().addScaledVector(UP, 30);
+          seg(ref, j.hip, top, 0.5);
+          const deg = arc(A, j.hip, UP.clone(), tmp.subVectors(j.sh, j.hip), 20);
+          const ok = deg <= d.max + 0.5;
+          for (const m of [A.fill, A.edge]) m.material.color.set(ok ? C.ok : C.warn);
+          it.pos.copy(j.hip).add(new THREE.Vector3(22, 4, 10));
+          setLab(it.lab, ok, `Neigung ${Math.round(deg)}°`);
+        };
+      } else if (d.k === "track") {
+        const t = mk(tube, mat(C.guide, 0.85)), dot = mk(new THREE.TorusGeometry(4.2, 0.7, 8, 24), mat(C.ok));
+        it.objs.push(t, dot);
+        if (d.side === 1) it.lab = label();
+        it.upd = j => {
+          const s = d.side, a = j["hp" + s], b = j["to" + s];
+          seg(t, a, b, 0.6);
+          dot.position.copy(j["k" + s]); dot.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), new THREE.Vector3(1, 0, 0));
+          // Abstand des Knies zur Linie (seitlich): grün, solange das Knie auf der Linie bleibt
+          const t0 = (j["k" + s].y - b.y) / ((a.y - b.y) || 1), zl = b.z + (a.z - b.z) * t0, ok = Math.abs(j["k" + s].z - zl) < 3;
+          dot.material.color.set(ok ? C.ok : C.warn);
+          if (it.lab) { it.pos.copy(j["k" + s]).add(new THREE.Vector3(0, 6, 8)); setLab(it.lab, ok, "Knie über Fußspitze"); }
+        };
+      } else if (d.k === "angle") {
+        const A = newArc(C.ok); it.objs.push(A.fill, A.edge); it.lab = label();
+        it.upd = j => {
+          const p = j[d.at], deg = arc(A, p, tmp.subVectors(j[d.a], p).clone(), tmp2.subVectors(j[d.b], p).clone(), 17);
+          const ok = deg >= d.ok - 0.5;
+          for (const m of [A.fill, A.edge]) m.material.color.set(ok ? C.ok : C.warn);
+          it.pos.copy(p).add(new THREE.Vector3(14, 8, 6));
+          setLab(it.lab, ok, `${d.name} ${Math.round(deg)}°`);
+        };
+      } else if (d.k === "heel") {
+        const discs = [1, 2].map(() => { const m = mk(new THREE.CircleGeometry(6, 28), mat(C.ok, 0.55)); m.rotation.x = -Math.PI / 2; return m; });
+        it.objs.push(...discs); it.lab = label();
+        it.upd = j => {
+          let ok = true;
+          discs.forEach((m, i) => { const an = j["an" + (i + 1)]; m.position.set(an.x - 1, 0.4, an.z); ok = ok && an.y < 9; m.material.color.set(ok ? C.ok : C.warn); });
+          it.pos.copy(j.an1).add(new THREE.Vector3(-6, 10, 6));
+          setLab(it.lab, ok, "Fersen am Boden");
+        };
+      }
+      items.push(it);
+    }
+  });
+
+  let show = -2; // -2 = aus, -1 = alle, sonst Nummer des Hinweises
+  const P = new THREE.Vector3();
+  return {
+    set(v) { show = v; for (const it of items) { const on = show === -1 || show === it.hi; for (const o of it.objs) o.visible = on; if (it.lab) it.lab.hidden = !on; } },
+    update(j) { if (show === -2) return; for (const it of items) if (show === -1 || show === it.hi) it.upd(j); },
+    place(camera, w, h) {
+      if (show === -2) return;
+      for (const it of items) {
+        if (!it.lab || it.lab.hidden) continue;
+        P.copy(it.pos).project(camera);
+        it.lab.el.style.transform = `translate(${((P.x + 1) / 2 * w).toFixed(1)}px,${((1 - P.y) / 2 * h).toFixed(1)}px) translate(-50%,-50%)`;
+      }
+    },
+    dispose() { tube.dispose(); for (const m of mats) m.dispose(); },
+  };
+}
 
 // Pose aus uebungen.js zu 3D-Gelenkpunkten
 function joints(ex, t) {
@@ -46,7 +172,7 @@ function colors() {
   const cs = getComputedStyle(probe), out = { bg: cs.backgroundColor, ink: cs.color, line: cs.borderTopColor };
   probe.remove();
   const dark = new THREE.Color(out.bg).getHSL({}).l < 0.3;
-  return { ...out, dark, body: dark ? "#cfcfd6" : "#3b3b42", joint: dark ? "#e9e9ee" : "#26262b", acc: "#ff5a1f", prop: dark ? "#3a3a41" : "#d3d3da", floor: dark ? "#232327" : "#e8e8ec" };
+  return { ...out, dark, body: dark ? "#cfcfd6" : "#3b3b42", joint: dark ? "#e9e9ee" : "#26262b", acc: "#ff5a1f", ok: dark ? "#3ccf7c" : "#1f9d55", warn: dark ? "#ffc53d" : "#e0a100", guide: dark ? "#6cb4ff" : "#2f7cf6", prop: dark ? "#3a3a41" : "#d3d3da", floor: dark ? "#232327" : "#e8e8ec" };
 }
 
 function buildScene(ex, C) {
@@ -135,12 +261,6 @@ function buildScene(ex, C) {
     }
   }
 
-  const seg = (m, a, b, r) => {
-    tmp.subVectors(b, a); const len = tmp.length() || 0.001;
-    m.position.copy(a).addScaledVector(tmp, 0.5);
-    m.quaternion.setFromUnitVectors(UP, tmp.divideScalar(len));
-    m.scale.set(r, len, r);
-  };
   function pose(j) {
     for (const l of limbs) seg(l.m, j[l.a], j[l.b], l.r);
     for (const b of balls) b.m.position.copy(j[b.k]);
@@ -174,9 +294,19 @@ export function open3d(ex, opts = {}) {
   <div class="v3can"><div class="v3hint">Mit einem Finger drehen · mit zwei Fingern zoomen</div></div>
   <div class="v3ctl">
     <div class="seg v3views"><button data-view="front">Vorne</button><button data-view="diag" aria-pressed="true">Schräg</button><button data-view="side">Seite</button><button data-view="top">Oben</button></div>
+    <div class="v3hints" hidden><div class="chips v3chips"></div><p class="v3txt"></p></div>
     <div class="v3row"><button class="cta sec" data-v3="play"></button><button class="cta sec" data-v3="slow" aria-pressed="false">Zeitlupe</button></div>
   </div>`;
   box.querySelector(".v3bar b").textContent = ex.name;
+  const defs = H3[ex.id];
+  if (defs) {
+    const row = box.querySelector(".v3row");
+    row.classList.add("three");
+    row.insertAdjacentHTML("beforeend", '<button class="cta sec" data-v3="hints" aria-pressed="false">Hinweise</button>');
+    const ch = box.querySelector(".v3chips");
+    ch.innerHTML = defs.map((h, i) => `<button class="chip" data-hint="${i}" aria-pressed="false"></button>`).join("");
+    defs.forEach((h, i) => { ch.querySelector(`[data-hint="${i}"]`).textContent = h.t; });
+  }
   document.body.appendChild(box);
   const wrap = box.querySelector(".v3can");
 
@@ -193,6 +323,7 @@ export function open3d(ex, opts = {}) {
   wrap.prepend(renderer.domElement);
 
   const { scene, pose } = buildScene(ex, C);
+  const hints = defs ? makeHints(scene, defs, C, wrap) : null;
   const camera = new THREE.PerspectiveCamera(34, 1, 1, 2000);
 
   // Bildausschnitt: Mitte und Größe aus Anfangs- und Endpose
@@ -238,11 +369,14 @@ export function open3d(ex, opts = {}) {
       az += d * k; el += (elT - el) * k; dist += (distT - dist) * k; dirty = true;
     }
     if (dirty) {
-      pose(joints(ex, ease(ph)));
+      const jj = joints(ex, ease(ph));
+      pose(jj);
+      if (hints) hints.update(jj);
       const r = dist * (camera.userData.fit || 1);
       camera.position.set(target.x + r * Math.cos(el) * Math.sin(az), target.y + r * Math.sin(el), target.z + r * Math.cos(el) * Math.cos(az));
       camera.lookAt(target);
       renderer.render(scene, camera);
+      if (hints) hints.place(camera, wrap.clientWidth, wrap.clientHeight);
       dirty = false;
     }
     raf = requestAnimationFrame(frame);
@@ -291,12 +425,33 @@ export function open3d(ex, opts = {}) {
     if (b.dataset.v3 === "close") return close();
     if (b.dataset.v3 === "play") { playing = !playing; setPlay(); dirty = true; return; }
     if (b.dataset.v3 === "slow") { slow = !slow; b.setAttribute("aria-pressed", String(slow)); if (!playing) { playing = true; setPlay(); } return; }
+    if (b.dataset.v3 === "hints") {
+      const on = b.getAttribute("aria-pressed") !== "true";
+      b.setAttribute("aria-pressed", String(on));
+      box.querySelector(".v3hints").hidden = !on;
+      if (on) pickHint(cur3 < 0 ? 0 : cur3); else hints.set(-2);
+      hideHint(); dirty = true; return;
+    }
+    if (b.dataset.hint) { pickHint(+b.dataset.hint); return; }
     if (b.dataset.view) {
       const [a, v] = VIEWS[b.dataset.view];
       let t = a * rad, d = t - azT; azT += Math.atan2(Math.sin(d), Math.cos(d));
       elT = v * rad; distT = base; markViews(b.dataset.view); hideHint();
     }
   });
+
+  function goView(name) {
+    const [a, v] = VIEWS[name];
+    const t = a * rad, d = t - azT; azT += Math.atan2(Math.sin(d), Math.cos(d));
+    elT = v * rad; distT = base; markViews(name);
+  }
+  let cur3 = -1;
+  function pickHint(i) {
+    for (const c of box.querySelectorAll("[data-hint]")) c.setAttribute("aria-pressed", String(+c.dataset.hint === i));
+    box.querySelector(".v3txt").textContent = defs[i].txt;
+    cur3 = i; hints.set(i); goView(defs[i].view);
+    dirty = true;
+  }
 
   const opener = document.activeElement;
   box.querySelector('[data-v3="close"]').focus();
@@ -309,6 +464,7 @@ export function open3d(ex, opts = {}) {
     ro.disconnect();
     document.removeEventListener("keydown", onKey);
     scene.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
+    if (hints) hints.dispose();
     renderer.dispose();
     renderer.forceContextLoss();
     box.remove();

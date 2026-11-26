@@ -901,7 +901,7 @@ function xInput(i){const d=i.dataset;
 document.addEventListener("change",ev=>{const t=ev.target;if(t.id==="bkfile"&&t.files[0])pickFile(t.files[0]);if(t.id==="runfile"&&t.files.length){importRuns(t.files);t.value=""}});
 
 /* ---------- boot ---------- */
-const APPV="1.2";
+const APPV="1.3";
 let updW=null;
 (function boot(){
   const d=load("tk3",null);if(d){activeId=d.activeId||null;mode=d.mode||null;planId=d.planId||null;draft=d.draft||{};order=d.order||{};swaps=d.swaps||{};

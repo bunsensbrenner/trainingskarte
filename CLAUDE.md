@@ -36,6 +36,7 @@ Web-App, die man in Safari über »Zum Home-Bildschirm« installiert. Läuft off
 
 ## 3D-Figuren (seit 1.2, im Aufbau)
 - Die 3D-Puppe rechnet die Seitenansicht-Posen aus `uebungen.js` in den Raum um (Schulter-/Hüftbreite ergänzt). Extra-Angaben je Übung in `X3` in `fig3d.js`.
+- Technik-Hinweise (seit 1.3): Knopf »Hinweise« in der 3D-Ansicht, je Hinweis Linien/Winkelbögen/Schilder und passende Ansicht. Daten in `H3` in `fig3d.js` (Bausteine spine, lean, track, angle, heel). Grün = im guten Bereich, Gelb = Grenze. Winkel sind allgemeine, vorsichtige Richtwerte. Stand: nur Goblet Squat; bei Schritt 2/3 für alle Übungen mitschreiben.
 - Welche Übungen den 3D-Knopf haben, steht in `D3` in `app.js`. Stand: nur Goblet Squat (Schritt 1).
 - Plan: 2) alle Übungen übernehmen und Geräte in 3D, 3) seitliche Übungen (Seitheben, Seitstütz, Butterfly, Abduktion …) von Hand in 3D, 4) kleine Figuren auf den Karten in 3D (Tempo prüfen), 5) online.
 
